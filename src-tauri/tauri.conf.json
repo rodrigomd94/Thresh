@@ -1,0 +1,83 @@
+{
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "beforeBuildCommand": "pnpm build",
+    "devPath": "http://localhost:1420",
+    "distDir": "../dist"
+  },
+  "package": {
+    "productName": "frost-tauri",
+    "version": "0.0.0"
+  },
+  "tauri": {
+    "allowlist": {
+      "window": {
+        "show": true
+      },
+      "all": true,
+      "shell": {
+        "all": false,
+        "open": true
+      }
+    },
+    "windows": [
+      {
+        "title": "frost-tauri",
+        "width": 800,
+        "height": 600
+      }
+    ],
+    
+    "security": {
+      "csp": null,
+      "dangerousRemoteDomainIpcAccess": [
+        {
+          "domain": "app.minswap.org",
+          "windows": [
+            "origin",
+            "main",
+            "webview",
+            "result"
+          ],
+          "enableTauriAPI":true,
+          "plugins": ["event"]
+        },
+        {
+          "domain": "www.app.minswap.org",
+          "windows": [
+            "origin",
+            "main",
+            "webview",
+            "result"
+          ],
+          "enableTauriAPI":true,
+          "plugins": ["event"]
+        },
+        {
+          "domain": "https://app.minswap.org",
+          "windows": [
+            "origin",
+            "webview",
+            "main",
+            "result"
+          ],
+          "enableTauriAPI":true,
+          "plugins": ["event"]
+        }
+      ]
+      
+    },
+    "bundle": {
+      "active": true,
+      "targets": "all",
+      "identifier": "com.tauri.dev",
+      "icon": [
+        "icons/32x32.png",
+        "icons/128x128.png",
+        "icons/128x128@2x.png",
+        "icons/icon.icns",
+        "icons/icon.ico"
+      ]
+    }
+  }
+}

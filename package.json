@@ -1,0 +1,43 @@
+{
+  "name": "frost-tauri",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@cardano-sdk/core": "^0.31.0",
+    "@cardano-sdk/crypto": "^0.1.23",
+    "@cardano-sdk/dapp-connector": "^0.12.17",
+    "@cardano-sdk/util": "^0.15.1",
+    "@cardano-sdk/web-extension": "^0.27.4",
+    "@esbuild-plugins/node-globals-polyfill": "^0.2.3",
+    "@tauri-apps/api": "1.5.6",
+    "buffer": "^6.0.3",
+    "hex-encode-decode": "^1.0.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "rollup-plugin-polyfill-node": "^0.13.0",
+    "ts-log": "^2.2.5",
+    "vite-plugin-node-polyfills": "^0.22.0",
+    "vite-plugin-raw": "^1.0.3",
+    "vite-plugin-top-level-await": "^1.4.1",
+    "vite-plugin-wasm": "^3.3.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "1.5.14",
+    "@types/chrome": "^0.0.268",
+    "@types/react": "^18.2.15",
+    "@types/react-dom": "^18.2.7",
+    "@vitejs/plugin-react": "^4.2.1",
+    "ts-loader": "^9.5.1",
+    "typescript": "^5.0.2",
+    "vite": "^5.0.0",
+    "webpack": "^5.91.0",
+    "webpack-cli": "^5.1.4"
+  }
+}

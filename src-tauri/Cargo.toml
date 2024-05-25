@@ -1,0 +1,24 @@
+[package]
+name = "frost-tauri"
+version = "0.0.0"
+description = "A Tauri App"
+authors = ["Rodrigo Molina"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[build-dependencies]
+tauri-build = { version = "1", features = [] }
+
+[dependencies]
+tauri = { version = "1", features = ["api-all"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+frost-ed25519 = "1.0.0"
+tokio = "1.37.0"
+pallas-addresses = "0.26.0"
+pallas-crypto = "0.26.0"
+
+[features]
+# This feature is used for production builds or when a dev server is not specified, DO NOT REMOVE!!
+custom-protocol = ["tauri/custom-protocol"]
