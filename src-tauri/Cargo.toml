@@ -21,6 +21,8 @@ pallas-crypto = "0.26.0"
 cardano-multiplatform-lib = "5.3.1"
 frost = "0.1.0"
 rand = "0.8.5"
+iroh = "0.17.0"
+anyhow = "1.0.86"
 
 [features]
 # This feature is used for production builds or when a dev server is not specified, DO NOT REMOVE!!
