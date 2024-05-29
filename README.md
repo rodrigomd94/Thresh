@@ -2,6 +2,8 @@
 
 # Thresh - A Desktop Cardano Wallet
 
+![Thresh Logo](logo.png)
+
 ## Introduction
 
 **Thresh** is a desktop Cardano wallet that leverages FROST threshold signatures and distributed key generation. This innovative approach enables Cardano users to manage multisignature (multisig) wallets that can seamlessly interact with decentralized applications (dApps) without relying on Native Scripts. 
