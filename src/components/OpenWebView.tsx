@@ -32,6 +32,7 @@ const OpenWebview = () => {
         console.log("Injecting JS")
         const privKey = await createWalletFromMnemonic(testMenmonic, "Mainnet")
         const walletAPI = new Web3AuthWalletAPI(privKey.paymentKey, privKey.stakeKey, "Mainnet", "https://cardano-preprod.blockfrost.io/api/v0", "mainnetRYnsFXoxIeqmPhpUcHmS91I0DfADfJon")
+        await invoke('create_round1_key_package', { maxSigners:3, minSigners:2, participantIndex:1 })
         await invoke('init_wallet_api', { window:'webview' })
     }
 
