@@ -4,7 +4,6 @@ use frost_ed25519::Error;
 #[tauri::command]
 // Creates a round 1 key package and returns the serialized public key package
 pub async fn create_round1_key_package(
-    app: tauri::AppHandle,
     max_signers: u16,
     min_signers: u16,
     participant_index: u16
