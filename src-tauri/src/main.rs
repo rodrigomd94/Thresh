@@ -5,9 +5,11 @@ use tauri::{
     WindowUrl,
 };
 mod utils;
-use frost_tauri::utils::cip30::{
-    get_change_address, get_collateral, get_network_id, get_reward_address, get_unused_addresses,
-    get_used_addresses, get_utxos, sign_data, sign_tx, submit_tx,
+mod commands;
+use frost_tauri::commands::frost::create_round1_key_package;
+use frost_tauri::commands::cip30::{
+    get_change_address, get_collateral, sign_data, get_network_id, get_reward_address, get_unused_addresses,
+    get_used_addresses, get_utxos, sign_tx, submit_tx,
 };
 
 #[tauri::command]
@@ -65,7 +67,8 @@ fn main() {
         get_unused_addresses,
         get_change_address,
         get_reward_address,
-        get_network_id
+        get_network_id,
+        create_round1_key_package,
         ])
         .setup(|app| {
             app.ipc_scope().configure_remote_access(

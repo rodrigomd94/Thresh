@@ -1549,6 +1549,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "frost"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b11623ba57dc3615195c7283e76b632b2e1306e4a298a6cc3d7d99c49e2bc193"
+
+[[package]]
 name = "frost-core"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1601,9 +1607,11 @@ name = "frost-tauri"
 version = "0.0.0"
 dependencies = [
  "cardano-multiplatform-lib",
+ "frost",
  "frost-ed25519",
  "pallas-addresses",
  "pallas-crypto",
+ "rand 0.8.5",
  "serde",
  "serde_json",
  "tauri",
