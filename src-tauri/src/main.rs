@@ -1,71 +1,21 @@
 use std::{fs, path::PathBuf, sync::Arc};
 
-use iroh::base::node_addr;
+use frost_tauri::network::iroh::{setup, AppState};
 use tauri::{
     ipc::RemoteDomainAccessScope, CustomMenuItem, Manager, Menu, MenuItem, Submenu, WindowBuilder,
     WindowUrl,
 };
 mod utils;
+pub mod network;
 mod commands;
 use frost_tauri::commands::frost::create_round1_key_package;
 use frost_tauri::commands::cip30::{
     get_change_address, get_collateral, sign_data, get_network_id, get_reward_address, get_unused_addresses,
     get_used_addresses, get_utxos, sign_tx, submit_tx,
 };
+use frost_tauri::commands::iroh::get_iroh_id;
 
-use iroh::client::MemIroh as Iroh;
 
-use anyhow::{anyhow, Result};
-
-use iroh::client::docs::LiveEvent;
-use iroh::docs::{ContentStatus};
-
-// this example uses a persistend iroh node stored in the application data directory
-type IrohNode = iroh::node::Node<iroh::blobs::store::fs::Store>;
-
-// setup an iroh node
-async fn setup<R: tauri::Runtime>(handle: tauri::AppHandle<R>) -> Result<()> {
-    // get the applicaiton data root, join with "iroh_data" to get the data root for the iroh node
-    let data_root = handle
-        .path_resolver()
-        .app_data_dir()
-        .ok_or_else(|| anyhow!("can't get application data directory"))?
-        .join("iroh_data");
-
-    // create the iroh node
-    let node = iroh::node::Node::persistent(data_root)
-        .await?
-        .spawn()
-        .await?;
-    let node_addr = node.my_addr().await.unwrap();
-    println!("Iroh node started, listening on: {:?}, with id: {}", node_addr, node.node_id());
-    handle.manage(AppState::new(node));
-
-    Ok(())
-}
-
-struct AppState {
-    //todos: Mutex<Option<(Todos, tokio::task::JoinHandle<()>)>>,
-    iroh: IrohNode,
-}
-impl AppState {
-    fn new(iroh: IrohNode) -> Self {
-        AppState {
-           // todos: Mutex::new(None),
-            iroh,
-        }
-    }
-
-    fn iroh(&self) -> Iroh {
-        self.iroh.client().clone()
-    }
-}
-
-#[tauri::command]
-fn get_iroh_id(state: tauri::State<'_, AppState>) -> String {
-    let state = state.iroh.node_id().to_string();
-    state
-}
 
 #[tauri::command]
 fn inject_script(app: tauri::AppHandle, window: String, script: String) {
