@@ -5,7 +5,7 @@ use frost::{
     },
     round1::{SigningCommitments, SigningNonces},
     round2::SignatureShare,
-    Ed25519Sha512, Identifier, Signature, SigningPackage,
+    Ed25519Sha512, Identifier, Signature, SigningPackage, Error as FrostError
 };
 // ANCHOR: dkg_import
 use frost_ed25519 as frost;
@@ -16,6 +16,10 @@ use pallas_crypto::{
 };
 use rand::{rngs::ThreadRng, thread_rng};
 use std::collections::BTreeMap;
+
+fn derive_identifier_from_iroh_node_id(node_id: &[u8]) -> Result<Identifier, FrostError> {
+    Identifier::derive(node_id)
+}
 
 #[derive(Debug)]
 pub struct Round1KeyPackage {
@@ -37,14 +41,15 @@ pub struct Distributedround1Packages {
 pub fn create_round1_key_package(
     max_signers: u16,
     min_signers: u16,
-    participant_index: u16, // mut rng: ThreadRng,
+    iroh_node_id: String, // mut rng: ThreadRng,
 ) -> Option<Round1KeyPackage> {
     let mut rng = thread_rng();
-    let participant_identifier = participant_index.try_into().expect("should be nonzero");
+    let participant_identifier = derive_identifier_from_iroh_node_id(iroh_node_id.as_bytes()).unwrap();
+    //let participant_identifier = participant_index.try_into().expect("should be nonzero");
     // ANCHOR: dkg_part1
     let part1_result =
         frost::keys::dkg::part1(participant_identifier, max_signers, min_signers, &mut rng);
-        
+
     let (secret_package, package) = match part1_result {
         Ok((round1_secret_package, round1_package)) => (round1_secret_package, round1_package),
         Err(e) => {
