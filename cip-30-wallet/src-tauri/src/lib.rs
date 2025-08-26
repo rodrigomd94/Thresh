@@ -1,5 +1,8 @@
 mod native_messaging;
 mod cip30;
+mod wallet;
+mod crypto;
+mod storage;
 
 use native_messaging::{NativeMessage, start_native_messaging, send_message};
 use cip30::handle_cip30_request;
