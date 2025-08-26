@@ -61,10 +61,7 @@ export function WalletDashboard({ walletId, walletName, onBack }: WalletDashboar
   };
 
   const formatAddress = (address: string) => {
-    if (address.length > 20) {
-      return `${address.slice(0, 8)}...${address.slice(-8)}`;
-    }
-    return address;
+    return `${address.slice(0, 8)}...${address.slice(-8)}`;
   };
 
   if (loading) {
@@ -102,7 +99,7 @@ export function WalletDashboard({ walletId, walletName, onBack }: WalletDashboar
             </div>
           </div>
         </CardHeader>
-        
+
         <CardContent className="space-y-6">
           {error && (
             <Alert variant="destructive">
@@ -113,7 +110,7 @@ export function WalletDashboard({ walletId, walletName, onBack }: WalletDashboar
           <Alert>
             <Wallet className="h-4 w-4" />
             <AlertDescription>
-              <strong>Wallet Created Successfully!</strong> Your addresses are derived from your recovery phrase. 
+              <strong>Wallet Created Successfully!</strong> Your addresses are derived from your recovery phrase.
               You can share these addresses to receive ADA.
             </AlertDescription>
           </Alert>
@@ -124,7 +121,7 @@ export function WalletDashboard({ walletId, walletName, onBack }: WalletDashboar
               <Badge variant="secondary">Account 0</Badge>
             </div>
 
-            <div className="grid gap-3">
+            <div className="flex flex-col">
               {addresses.map((addressInfo, index) => (
                 <Card key={index} className="transition-all hover:shadow-md">
                   <CardContent className="p-4">
@@ -138,13 +135,13 @@ export function WalletDashboard({ walletId, walletName, onBack }: WalletDashboar
                             {addressInfo.path}
                           </Badge>
                         </div>
-                        
+
                         <div className="font-mono text-sm bg-muted p-2 rounded border">
-                          <span className="hidden sm:inline">{addressInfo.address}</span>
-                          <span className="sm:hidden">{formatAddress(addressInfo.address)}</span>
+                          {/* <span className="hidden sm:inline">{addressInfo.address}</span> */}
+                          <span className="">{formatAddress(addressInfo.address)}</span>
                         </div>
                       </div>
-                      
+
                       <Button
                         variant="ghost"
                         size="sm"
@@ -195,7 +192,7 @@ export function WalletDashboard({ walletId, walletName, onBack }: WalletDashboar
 
           <Alert>
             <AlertDescription className="text-xs">
-              <strong>Security Note:</strong> These addresses are generated from your recovery phrase. 
+              <strong>Security Note:</strong> These addresses are generated from your recovery phrase.
               Keep your recovery phrase secure - anyone with access to it can control your wallet.
             </AlertDescription>
           </Alert>

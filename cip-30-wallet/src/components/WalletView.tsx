@@ -62,7 +62,7 @@ export function WalletView({ walletId, walletName, onBack }: WalletViewProps) {
 
   const formatAddress = (address: string) => {
     if (address.length > 20) {
-      return `${address.slice(0, 8)}...${address.slice(-8)}`;
+      return `${address.slice(0, 36)}...${address.slice(-16)}`;
     }
     return address;
   };
@@ -140,8 +140,7 @@ export function WalletView({ walletId, walletName, onBack }: WalletViewProps) {
                         </div>
                         
                         <div className="font-mono text-sm bg-muted p-2 rounded border">
-                          <span className="hidden sm:inline">{addressInfo.address}</span>
-                          <span className="sm:hidden">{formatAddress(addressInfo.address)}</span>
+                          <span className="">{formatAddress(addressInfo.address)}</span>
                         </div>
                       </div>
                       
