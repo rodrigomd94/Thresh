@@ -26,6 +26,7 @@ export function MnemonicGeneration({ onBack, onWalletCreated }: MnemonicGenerati
   const [showMnemonic, setShowMnemonic] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [walletId, setWalletId] = useState<string | null>(null);
 
   const generateMnemonic = async (wordCount: number = 24) => {
     try {
@@ -61,7 +62,7 @@ export function MnemonicGeneration({ onBack, onWalletCreated }: MnemonicGenerati
       setStep('creating');
       setError(null);
 
-      await invoke('create_wallet', {
+      const response = await invoke<{wallet_id: string}>('create_wallet', {
         request: {
           name: walletName,
           password: password,
@@ -69,6 +70,8 @@ export function MnemonicGeneration({ onBack, onWalletCreated }: MnemonicGenerati
         }
       });
 
+      // Store wallet ID for dashboard
+      setWalletId(response.wallet_id);
       setStep('dashboard');
     } catch (err) {
       console.error('Failed to create wallet:', err);
@@ -101,11 +104,11 @@ export function MnemonicGeneration({ onBack, onWalletCreated }: MnemonicGenerati
     );
   }
 
-  if (step === 'dashboard') {
+  if (step === 'dashboard' && walletId) {
     return (
       <WalletDashboard
+        walletId={walletId}
         walletName={walletName}
-        mnemonic={mnemonic}
         onBack={onWalletCreated}
       />
     );

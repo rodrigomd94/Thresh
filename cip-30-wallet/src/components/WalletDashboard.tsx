@@ -14,12 +14,12 @@ interface AddressInfo {
 }
 
 interface WalletDashboardProps {
+  walletId: string;
   walletName: string;
-  mnemonic: string[];
   onBack: () => void;
 }
 
-export function WalletDashboard({ walletName, mnemonic, onBack }: WalletDashboardProps) {
+export function WalletDashboard({ walletId, walletName, onBack }: WalletDashboardProps) {
   const [addresses, setAddresses] = useState<AddressInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -27,16 +27,16 @@ export function WalletDashboard({ walletName, mnemonic, onBack }: WalletDashboar
 
   useEffect(() => {
     loadAddresses();
-  }, [mnemonic]);
+  }, [walletId]);
 
   const loadAddresses = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      // Load first 5 addresses from account 0
-      const addressList = await invoke<AddressInfo[]>('get_addresses_from_mnemonic', {
-        mnemonic,
+      // Load first 5 addresses from account 0 using secure public key derivation
+      const addressList = await invoke<AddressInfo[]>('get_addresses_from_wallet', {
+        walletId,
         accountIndex: 0,
         count: 5,
       });

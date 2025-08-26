@@ -5,11 +5,10 @@ use crate::crypto::{
 };
 use crate::storage::wallet_store::{WalletStore, WalletMetadata};
 use crate::wallet::{WalletError, WalletResult};
+use pallas_crypto::key::ed25519;
 use serde::{Deserialize, Serialize};
-use std::sync::Mutex;
+use std::{hash::Hash, sync::Mutex};
 use tauri::State;
-use pallas_addresses::Address;
-use pallas_crypto::PublicKey;
 /// Application state to hold the wallet store
 pub struct AppState {
     pub wallet_store: Mutex<WalletStore>,
@@ -28,7 +27,6 @@ pub struct ExtendedWalletMetadata {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct WalletCreateResponse {
     pub wallet_id: String,
-    pub mnemonic: Vec<String>,
 }
 
 /// Response for wallet info
@@ -174,7 +172,6 @@ pub async fn create_wallet(
     
     Ok(WalletCreateResponse {
         wallet_id,
-        mnemonic: request.mnemonic,
     })
 }
 
@@ -207,72 +204,48 @@ pub async fn derive_address_from_wallet(
     let account_public_key = Bip32PublicKey::from_extended_bytes(&key_bytes)
         .map_err(|e| format!("Failed to create account public key: {}", e))?;
     
-    // Derive external chain: m/1852'/1815'/0'/0 (soft derivation)
-    let external_chain = account_public_key.derive(0)
-        .map_err(|e| format!("Failed to derive external chain: {}", e))?;
+    // Derive payment key: m/1852'/1815'/0'/0/address_index (role 0 = external)
+    let payment_chain = account_public_key.derive(0)
+        .map_err(|e| format!("Failed to derive payment chain: {}", e))?;
+    let payment_key = payment_chain.derive(address_index)
+        .map_err(|e| format!("Failed to derive payment key: {}", e))?;
     
-    // Derive address: m/1852'/1815'/0'/0/address_index (soft derivation)
-    let address_key = external_chain.derive(address_index)
-        .map_err(|e| format!("Failed to derive address key: {}", e))?;
+    // Derive staking key: m/1852'/1815'/0'/2/0 (role 2 = staking)
+    let staking_chain = account_public_key.derive(2)
+        .map_err(|e| format!("Failed to derive staking chain: {}", e))?;
+    let staking_key = staking_chain.derive(0)
+        .map_err(|e| format!("Failed to derive staking key: {}", e))?;
     
-    // Get public key and create address
-    let public_key_bytes = address_key.to_bytes();
+    // Create Cardano base address combining payment and staking keys
+    let payment_pubkey_bytes = payment_key.to_bytes();
+    let staking_pubkey_bytes = staking_key.to_bytes();
     
-    // For now, return a placeholder address format
-    // In production, this would use proper Cardano address encoding with pallas-addresses
-    let address = format!("addr1{}", hex::encode(&public_key_bytes[..16]));
+    let payment_pubkey_hash = pallas_crypto::hash::Hasher::<224>::hash(&payment_pubkey_bytes);
+    let payment_part = pallas_addresses::ShelleyPaymentPart::Key(payment_pubkey_hash);
+
+    let staking_pubkey_hash = pallas_crypto::hash::Hasher::<224>::hash(&staking_pubkey_bytes);
+    let staking_part = pallas_addresses::ShelleyDelegationPart::Key(staking_pubkey_hash);
+    
+    // Create base address (payment + staking)
+    let network = pallas_addresses::Network::Mainnet;
+    let address = pallas_addresses::ShelleyAddress::new(
+        network,
+        payment_part,
+        staking_part
+    );
+    
+    let address_string = address.to_bech32()
+        .map_err(|e| format!("Failed to encode address: {}", e))?;
     let path = format!("m/1852'/1815'/{}'/{}/{}", account_index, 0, address_index);
     
     Ok(AddressInfo {
-        address,
+        address: address_string,
         path,
         account_index,
         address_index,
     })
 }
 
-#[tauri::command]
-pub async fn derive_address_from_mnemonic(
-    mnemonic: Vec<String>,
-    account_index: u32,
-    address_index: u32,
-) -> Result<AddressInfo, String> {
-    // Validate mnemonic
-    validate_mnemonic(&mnemonic)
-        .map_err(|e| format!("Invalid mnemonic: {}", e))?;
-    
-    // Generate seed and master key
-    let seed = mnemonic_to_seed(&mnemonic, "")
-        .map_err(|e| format!("Failed to generate seed: {}", e))?;
-    
-    let master_key = Bip32PrivateKey::from_bip39_seed(&seed)
-        .map_err(|e| format!("Failed to generate master key: {}", e))?;
-    
-    // Derive using Cardano path: m/1852'/1815'/account'/0/address_index
-    let purpose = master_key.derive(1852 | 0x80000000);        // Hardened
-    let coin_type = purpose.derive(1815 | 0x80000000);         // Hardened  
-    let account = coin_type.derive(account_index | 0x80000000); // Hardened
-    
-    let external_chain = account.derive(0);  // Soft derivation
-    
-    let address_key = external_chain.derive(address_index);  // Soft derivation
-    
-    // Get public key and create address
-    let public_key = address_key.to_public();
-    let public_key_bytes = public_key.to_bytes();
-    
-    // For now, return a placeholder address format
-    // In production, this would use proper Cardano address encoding with pallas-addresses
-    let address = format!("addr1{}", hex::encode(&public_key_bytes[..16]));
-    let path = format!("m/1852'/1815'/{}'/{}/{}", account_index, 0, address_index);
-    
-    Ok(AddressInfo {
-        address,
-        path,
-        account_index,
-        address_index,
-    })
-}
 
 #[tauri::command]
 pub async fn get_addresses_from_wallet(
@@ -301,77 +274,45 @@ pub async fn get_addresses_from_wallet(
     let account_public_key = Bip32PublicKey::from_extended_bytes(&key_bytes)
         .map_err(|e| format!("Failed to create account public key: {}", e))?;
     
-    // Derive external chain: m/1852'/1815'/0'/0 (soft derivation)
-    let external_chain = account_public_key.derive(0)
-        .map_err(|e| format!("Failed to derive external chain: {}", e))?;
+    // Derive payment chain: m/1852'/1815'/0'/0 (role 0 = external)
+    let payment_chain = account_public_key.derive(0)
+        .map_err(|e| format!("Failed to derive payment chain: {}", e))?;
+    
+    // Derive staking key once (same for all addresses in the account)
+    let staking_chain = account_public_key.derive(2)
+        .map_err(|e| format!("Failed to derive staking chain: {}", e))?;
+    let staking_key = staking_chain.derive(0)
+        .map_err(|e| format!("Failed to derive staking key: {}", e))?;
+    let staking_pubkey_bytes = staking_key.to_bytes();
     
     let mut addresses = Vec::new();
+    let network = pallas_addresses::Network::Mainnet;
     
     // Derive each address
     for i in 0..count {
-        let address_key = external_chain.derive(i)
-            .map_err(|e| format!("Failed to derive address key {}: {}", i, e))?;
+        // Derive payment key for this index
+        let payment_key = payment_chain.derive(i)
+            .map_err(|e| format!("Failed to derive payment key {}: {}", i, e))?;
         
-        let public_key_bytes = address_key.to_bytes();
-        let pallas_pubkey = PublicKey::from_bytes(&public_key_bytes)
-            .map_err(|e| format!("Failed to create pallas public key: {}", e))?;
-        let address = Address::new(
-            &pallas_pubkey,
-            None,
-            &pallas_addresses::Network::Mainnet,
-        ).map_err(|e| format!("Failed to create address: {}", e))?;
-        //let address = format!("addr1{}", hex::encode(&public_key_bytes[..16]));
-        let path = format!("m/1852'/1815'/{}'/{}/{}", account_index, 0, i);
-        
-        addresses.push(AddressInfo {
-            address,
-            path,
-            account_index,
-            address_index: i,
-        });
-    }
-    
-    Ok(addresses)
-}
+        let payment_pubkey_bytes = payment_key.to_bytes();
+        let payment_pubkey_hash = pallas_crypto::hash::Hasher::<224>::hash(&payment_pubkey_bytes);
+        let payment_part = pallas_addresses::ShelleyPaymentPart::Key(payment_pubkey_hash);
 
-#[tauri::command] 
-pub async fn get_addresses_from_mnemonic(
-    mnemonic: Vec<String>,
-    account_index: u32,
-    count: u32,
-) -> Result<Vec<AddressInfo>, String> {
-    let mut addresses = Vec::new();
-    
-    // Validate mnemonic once
-    validate_mnemonic(&mnemonic)
-        .map_err(|e| format!("Invalid mnemonic: {}", e))?;
-    
-    // Generate seed and derive account key once for efficiency
-    let seed = mnemonic_to_seed(&mnemonic, "")
-        .map_err(|e| format!("Failed to generate seed: {}", e))?;
-    
-    let master_key = Bip32PrivateKey::from_bip39_seed(&seed)
-        .map_err(|e| format!("Failed to generate master key: {}", e))?;
-    
-    // Derive to account level: m/1852'/1815'/account' (hardened derivation)
-    let purpose = master_key.derive(1852 | 0x80000000);        // Hardened
-    let coin_type = purpose.derive(1815 | 0x80000000);         // Hardened  
-    let account = coin_type.derive(account_index | 0x80000000); // Hardened
-    
-    let external_chain = account.derive(0);  // Soft derivation
-    
-    // Derive each address
-    for i in 0..count {
-        let address_key = external_chain.derive(i);  // Returns Self directly, not Result
+        let staking_pubkey_hahs = pallas_crypto::hash::Hasher::<224>::hash(&staking_pubkey_bytes);
+        let staking_part = pallas_addresses::ShelleyDelegationPart::Key(staking_pubkey_hahs);
+        // Create base address (payment + staking)
+        let address = pallas_addresses::ShelleyAddress::new(
+            network,
+            payment_part,
+            staking_part
+        );
         
-        let public_key = address_key.to_public();
-        let public_key_bytes = public_key.to_bytes();
-        
-        let address = format!("addr1{}", hex::encode(&public_key_bytes[..16]));
+        let address_string = address.to_bech32()
+            .map_err(|e| format!("Failed to encode address: {}", e))?;
         let path = format!("m/1852'/1815'/{}'/{}/{}", account_index, 0, i);
         
         addresses.push(AddressInfo {
-            address,
+            address: address_string,
             path,
             account_index,
             address_index: i,

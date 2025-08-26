@@ -38,9 +38,7 @@ pub fn run() {
             validate_wallet_password,
             // Address derivation commands
             derive_address_from_wallet,
-            derive_address_from_mnemonic,
             get_addresses_from_wallet,
-            get_addresses_from_mnemonic,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
