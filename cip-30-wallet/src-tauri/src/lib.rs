@@ -3,9 +3,11 @@ mod cip30;
 mod wallet;
 mod crypto;
 mod storage;
+mod commands;
 
 use native_messaging::{NativeMessage, start_native_messaging, send_message};
 use cip30::handle_cip30_request;
+use commands::*;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
@@ -15,9 +17,29 @@ fn greet(name: &str) -> String {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Initialize app state
+    let app_state = create_app_state()
+        .expect("Failed to initialize app state");
+    
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![greet])
+        .manage(app_state)
+        .invoke_handler(tauri::generate_handler![
+            greet,
+            // Wallet management commands
+            check_wallet_exists,
+            list_wallets,
+            get_wallet_info,
+            // Mnemonic commands  
+            generate_new_mnemonic,
+            validate_mnemonic_phrase,
+            // Wallet operations
+            create_wallet,
+            validate_wallet_password,
+            // Address derivation commands
+            derive_address_from_mnemonic,
+            get_addresses_from_mnemonic,
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

@@ -33,6 +33,7 @@ ed25519-dalek = "2.1.0"
 cryptoxide = "0.5.1"
 rand = "0.8.5"
 dirs = "5.0.1"
+hex = "0.4.3"
 
 [dev-dependencies]
 tempfile = "3.8.1"

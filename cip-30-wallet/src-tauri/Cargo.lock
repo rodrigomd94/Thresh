@@ -596,6 +596,7 @@ dependencies = [
  "dirs 5.0.1",
  "ed25519-bip32",
  "ed25519-dalek",
+ "hex",
  "pallas-addresses",
  "pallas-crypto",
  "rand 0.8.5",
