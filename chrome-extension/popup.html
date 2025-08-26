@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {
+      width: 350px;
+      padding: 16px;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+    h1 {
+      font-size: 18px;
+      margin-top: 0;
+    }
+    .status {
+      margin: 16px 0;
+      padding: 12px;
+      border-radius: 8px;
+      background: #f3f4f6;
+    }
+    .connected {
+      background: #d1fae5;
+      color: #065f46;
+    }
+    .disconnected {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+    button {
+      background: #3b82f6;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    button:hover {
+      background: #2563eb;
+    }
+    button:disabled {
+      background: #9ca3af;
+      cursor: not-allowed;
+    }
+    .info {
+      margin-top: 16px;
+      font-size: 12px;
+      color: #6b7280;
+    }
+  </style>
+</head>
+<body>
+  <h1>Tauri Cardano Wallet</h1>
+  <div id="status" class="status disconnected">
+    <strong>Status:</strong> <span id="status-text">Checking connection...</span>
+  </div>
+  <div>
+    <button id="connect-btn" disabled>Connect to Tauri App</button>
+  </div>
+  <div class="info">
+    <p>This wallet communicates with a locally running Tauri application.</p>
+    <p id="native-app-info"></p>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
