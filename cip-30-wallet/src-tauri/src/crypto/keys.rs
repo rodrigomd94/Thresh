@@ -51,11 +51,9 @@ impl SecretKey {
     }
 }
 
-/// BIP32 private key for Cardano
+/// BIP32 private key for Cardano (following Pallas pattern)
 #[derive(Debug, Clone)]
-pub struct Bip32PrivateKey {
-    inner: XPrv,
-}
+pub struct Bip32PrivateKey(XPrv);
 
 impl Bip32PrivateKey {
     /// Generate from BIP39 seed (following Pallas pattern)
@@ -66,62 +64,63 @@ impl Bip32PrivateKey {
         
         let xprv = XPrv::normalize_bytes_force3rd(xprv_bytes);
         
-        Ok(Bip32PrivateKey { inner: xprv })
+        Ok(Bip32PrivateKey(xprv))
     }
 
-    /// Derive child key (hardened derivation)
-    pub fn derive_hardened(&self, index: u32) -> WalletResult<Self> {
-        let child = self.inner.derive(DerivationScheme::V2, index | 0x80000000);
-        
-        Ok(Bip32PrivateKey { inner: child })
-    }
-
-    /// Derive child key (soft derivation)
-    pub fn derive_soft(&self, index: u32) -> WalletResult<Self> {
-        let child = self.inner.derive(DerivationScheme::V2, index);
-        
-        Ok(Bip32PrivateKey { inner: child })
+    /// Derive child key (following Pallas pattern)
+    pub fn derive(&self, index: u32) -> Self {
+        Self(self.0.derive(DerivationScheme::V2, index))
     }
 
     /// Get public key
     pub fn to_public(&self) -> Bip32PublicKey {
-        Bip32PublicKey {
-            inner: self.inner.public(),
-        }
+        Bip32PublicKey(self.0.public())
     }
 
     /// Get raw private key bytes
     pub fn to_bytes(&self) -> [u8; 64] {
-        self.inner.extended_secret_key().clone()
+        self.0.extended_secret_key().clone()
     }
 
     /// Get signing key for transactions
     pub fn to_signing_key(&self) -> [u8; 32] {
-        let extended = self.inner.extended_secret_key().clone();
+        let extended = self.0.extended_secret_key().clone();
         let mut key = [0u8; 32];
         key.copy_from_slice(&extended[..32]);
         key
     }
 }
 
-/// BIP32 public key for Cardano
+/// BIP32 public key for Cardano (following Pallas pattern)
 #[derive(Debug, Clone)]
-pub struct Bip32PublicKey {
-    inner: XPub,
-}
+pub struct Bip32PublicKey(XPub);
 
 impl Bip32PublicKey {
-    /// Derive child public key (soft derivation only)
-    pub fn derive_soft(&self, index: u32) -> WalletResult<Self> {
-        let child = self.inner.derive(DerivationScheme::V2, index)
-            .map_err(|e| WalletError::DerivationError(format!("Public key derivation failed: {:?}", e)))?;
-        
-        Ok(Bip32PublicKey { inner: child })
+    /// Create from extended public key bytes (including chain code)
+    pub fn from_extended_bytes(bytes: &[u8; 64]) -> WalletResult<Self> {
+        let xpub = XPub::from_bytes(*bytes);
+        Ok(Bip32PublicKey(xpub))
+    }
+
+    /// Derive child public key (following Pallas pattern with error handling)
+    pub fn derive(&self, index: u32) -> WalletResult<Self> {
+        self.0
+            .derive(DerivationScheme::V2, index)
+            .map(Self)
+            .map_err(|e| WalletError::DerivationError(format!("Public key derivation failed: {:?}", e)))
     }
 
     /// Get raw public key bytes
     pub fn to_bytes(&self) -> [u8; 32] {
-        self.inner.public_key().clone()
+        self.0.public_key().clone()
+    }
+
+    /// Get extended public key bytes (including chain code)
+    pub fn to_extended_bytes(&self) -> [u8; 64] {
+        // Use as_ref() to get the full 64-byte representation
+        let mut bytes = [0u8; 64];
+        bytes.copy_from_slice(self.0.as_ref());
+        bytes
     }
 }
 

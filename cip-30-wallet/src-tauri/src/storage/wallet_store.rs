@@ -10,6 +10,7 @@ pub struct WalletMetadata {
     pub name: String,
     pub created_at: i64,
     pub wallet_id: String,
+    pub master_public_key: Vec<u8>, // Store extended public key (with chain code) for address derivation
 }
 
 /// Wallet storage manager
@@ -46,7 +47,11 @@ impl WalletStore {
     pub fn list_wallets(&self) -> WalletResult<Vec<WalletMetadata>> {
         let mut wallets = Vec::new();
         
+        eprintln!("Listing wallets in directory: {:?}", self.data_dir);
+        eprintln!("Directory exists: {}", self.data_dir.exists());
+        
         if !self.data_dir.exists() {
+            eprintln!("Data directory doesn't exist, returning empty list");
             return Ok(wallets);
         }
 
@@ -85,6 +90,7 @@ impl WalletStore {
         wallet_id: &str,
         wallet: &WalletWrapper,
         password: &str,
+        master_public_key: &[u8; 64],
     ) -> WalletResult<()> {
         let encrypted = wallet.encrypt(password)?;
         
@@ -92,17 +98,24 @@ impl WalletStore {
         let wallet_path = self.get_wallet_path(wallet_id);
         let encrypted_bytes = encrypted.to_bytes();
         
+        eprintln!("Saving wallet to path: {:?}", wallet_path);
+        eprintln!("Encrypted wallet size: {} bytes", encrypted_bytes.len());
+        
         fs::write(&wallet_path, &encrypted_bytes)
             .map_err(|e| WalletError::StorageError(format!("Failed to save wallet: {}", e)))?;
+            
+        eprintln!("Wallet file written successfully");
 
         // Save wallet metadata
         let metadata = WalletMetadata {
             name: wallet.name.clone(),
             created_at: wallet.created_at,
             wallet_id: wallet_id.to_string(),
+            master_public_key: master_public_key.to_vec(),
         };
         
         self.save_wallet_metadata(wallet_id, &metadata)?;
+        eprintln!("Wallet metadata saved successfully");
 
         Ok(())
     }
