@@ -1,7 +1,7 @@
 use serde_json::{json, Value};
 use super::types::*;
 use crate::commands::{AppState, AddressInfo};
-use crate::wallet::derive_addresses_from_wallet;
+use crate::wallet::{derive_addresses_from_wallet, get_change_address_from_wallet};
 use std::sync::Mutex;
 use tauri::State;
 
@@ -35,7 +35,7 @@ pub async fn handle_cip30_request(method: &str, params: Value, app_state: Option
         },
         "getChangeAddress" => {
             eprintln!("[API] getChangeAddress called");
-            get_change_address()
+            get_change_address(app_state)
         },
         "getRewardAddresses" => {
             eprintln!("[API] getRewardAddresses called");
@@ -259,9 +259,31 @@ async fn get_unused_addresses(app_state: Option<&AppState>) -> Result<Value, Str
     Ok(json!(hex_addresses))
 }
 
-fn get_change_address() -> Result<Value, String> {
-    // Mock change address
-    Ok(json!(format!("{}{}", "0061", "5fxv2umyhttkxyxp8x0dlpdt3k6cwng5pxj3jhsydzer3n0d3vllmyqwsx5wktcd8cc3sq835lu7drv2xwl2wywfgse35a3x")))
+fn get_change_address(app_state: Option<&AppState>) -> Result<Value, String> {
+    let app_state = app_state.ok_or("App state not available")?;
+    
+    // For now, get the first wallet (in a real implementation, this should be the connected wallet)
+    let store = app_state.wallet_store.lock().unwrap();
+    let wallets = store.list_wallets()
+        .map_err(|e| format!("Failed to list wallets: {}", e))?;
+    
+    if wallets.is_empty() {
+        return Err("No wallets available".to_string());
+    }
+    
+    let wallet_id = &wallets[0].wallet_id;
+    
+    // Force reload of runtime network to pick up UI changes
+    let runtime_network = load_runtime_network_direct();
+    let network = runtime_network.unwrap_or_else(|| app_state.config.get_network());
+    
+    eprintln!("[API] get_unused_addresses using network: {:?}", network);
+    let addr_info = get_change_address_from_wallet(&store, wallet_id, 0, network)?;
+    
+    // Convert addresses to hex format for CIP-30
+    let address = pallas_addresses::Address::from_bech32(&addr_info.address)
+                .expect("Invalid address format");
+    Ok(json!(address.to_hex()))
 }
 
 fn get_reward_addresses() -> Result<Value, String> {
