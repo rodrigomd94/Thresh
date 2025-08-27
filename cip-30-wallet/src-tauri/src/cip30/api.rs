@@ -27,7 +27,7 @@ pub async fn handle_cip30_request(method: &str, params: Value, app_state: Option
         },
         "getUsedAddresses" => {
             eprintln!("[API] getUsedAddresses called with params: {}", serde_json::to_string(&params).unwrap_or_else(|_| "Invalid JSON".to_string()));
-            get_used_addresses(params).await
+            get_used_addresses(app_state).await
         },
         "getUnusedAddresses" => {
             eprintln!("[API] getUnusedAddresses called");

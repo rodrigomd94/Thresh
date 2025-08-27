@@ -186,64 +186,13 @@ pub async fn derive_address_from_wallet(
 ) -> Result<AddressInfo, String> {
     let store = state.wallet_store.lock().unwrap();
     
-    // Get wallet metadata with public key
-    let wallets = store.list_wallets()
-        .map_err(|e| format!("Failed to list wallets: {}", e))?;
+    // Use shared function to derive addresses, then return the specific one
+    let addresses = derive_addresses_from_wallet(&store, &wallet_id, account_index, address_index + 1)?;
     
-    let wallet_meta = wallets.iter()
-        .find(|w| w.wallet_id == wallet_id)
-        .ok_or_else(|| "Wallet not found".to_string())?;
-    
-    // Create account-level public key from stored bytes (already at m/1852'/1815'/0')
-    let mut key_bytes = [0u8; 64];
-    if wallet_meta.master_public_key.len() != 64 {
-        return Err("Invalid public key length".to_string());
-    }
-    key_bytes.copy_from_slice(&wallet_meta.master_public_key);
-    
-    let account_public_key = Bip32PublicKey::from_extended_bytes(&key_bytes)
-        .map_err(|e| format!("Failed to create account public key: {}", e))?;
-    
-    // Derive payment key: m/1852'/1815'/0'/0/address_index (role 0 = external)
-    let payment_chain = account_public_key.derive(0)
-        .map_err(|e| format!("Failed to derive payment chain: {}", e))?;
-    let payment_key = payment_chain.derive(address_index)
-        .map_err(|e| format!("Failed to derive payment key: {}", e))?;
-    
-    // Derive staking key: m/1852'/1815'/0'/2/0 (role 2 = staking)
-    let staking_chain = account_public_key.derive(2)
-        .map_err(|e| format!("Failed to derive staking chain: {}", e))?;
-    let staking_key = staking_chain.derive(0)
-        .map_err(|e| format!("Failed to derive staking key: {}", e))?;
-    
-    // Create Cardano base address combining payment and staking keys
-    let payment_pubkey_bytes = payment_key.to_bytes();
-    let staking_pubkey_bytes = staking_key.to_bytes();
-    
-    let payment_pubkey_hash = pallas_crypto::hash::Hasher::<224>::hash(&payment_pubkey_bytes);
-    let payment_part = pallas_addresses::ShelleyPaymentPart::Key(payment_pubkey_hash);
-
-    let staking_pubkey_hash = pallas_crypto::hash::Hasher::<224>::hash(&staking_pubkey_bytes);
-    let staking_part = pallas_addresses::ShelleyDelegationPart::Key(staking_pubkey_hash);
-    
-    // Create base address (payment + staking)
-    let network = pallas_addresses::Network::Mainnet;
-    let address = pallas_addresses::ShelleyAddress::new(
-        network,
-        payment_part,
-        staking_part
-    );
-    
-    let address_string = address.to_bech32()
-        .map_err(|e| format!("Failed to encode address: {}", e))?;
-    let path = format!("m/1852'/1815'/{}'/{}/{}", account_index, 0, address_index);
-    
-    Ok(AddressInfo {
-        address: address_string,
-        path,
-        account_index,
-        address_index,
-    })
+    // Return the address at the requested index
+    addresses.into_iter()
+        .find(|addr| addr.address_index == address_index)
+        .ok_or_else(|| "Failed to derive address at specified index".to_string())
 }
 
 
