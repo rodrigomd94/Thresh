@@ -16,7 +16,8 @@ pub struct NetworkConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UtxoRpcConfig {
-    pub url: String,
+    pub mainnet_url: Option<String>,
+    pub testnet_url: Option<String>,
     pub api_key: Option<String>,
 }
 
@@ -46,7 +47,12 @@ impl AppConfig {
             eprintln!("Loaded configuration from: {:?}", path);
             eprintln!("Network: {}", config.network.name);
             if let Some(ref utxorpc) = config.utxorpc {
-                eprintln!("UTXO RPC URL: {}", utxorpc.url);
+                if let Some(ref mainnet_url) = utxorpc.mainnet_url {
+                    eprintln!("UTXO RPC Mainnet URL: {}", mainnet_url);
+                }
+                if let Some(ref testnet_url) = utxorpc.testnet_url {
+                    eprintln!("UTXO RPC Testnet URL: {}", testnet_url);
+                }
             }
             
             Ok(config)

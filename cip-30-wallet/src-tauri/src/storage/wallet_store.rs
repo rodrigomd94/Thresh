@@ -1,7 +1,7 @@
 use crate::crypto::encryption::{EncryptedData, WalletWrapper};
 use crate::wallet::{WalletError, WalletResult};
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::{ PathBuf};
 use serde::{Serialize, Deserialize};
 
 /// Wallet metadata stored in plain text

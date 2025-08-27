@@ -5,6 +5,7 @@ mod crypto;
 mod storage;
 mod commands;
 mod config;
+mod utxorpc;
 
 use native_messaging::{NativeMessage, start_native_messaging, send_message};
 use cip30::handle_cip30_request;

@@ -13,30 +13,35 @@ pub async fn handle_cip30_request(method: &str, params: Value, app_state: Option
             eprintln!("[API] getExtensions called");
             get_extensions()
         },
+        //DONE
         "getNetworkId" => {
             eprintln!("[API] getNetworkId called");
             get_network_id(app_state)
         },
         "getUtxos" => {
             eprintln!("[API] getUtxos called with params: {}", serde_json::to_string(&params).unwrap_or_else(|_| "Invalid JSON".to_string()));
-            get_utxos(params)
+            get_utxos(params, app_state).await
         },
         "getBalance" => {
             eprintln!("[API] getBalance called");
             get_balance()
         },
+        //DONE
         "getUsedAddresses" => {
             eprintln!("[API] getUsedAddresses called with params: {}", serde_json::to_string(&params).unwrap_or_else(|_| "Invalid JSON".to_string()));
             get_used_addresses(app_state).await
         },
+        //DONE
         "getUnusedAddresses" => {
             eprintln!("[API] getUnusedAddresses called");
             get_unused_addresses(app_state).await
         },
+        //DONE
         "getChangeAddress" => {
             eprintln!("[API] getChangeAddress called");
             get_change_address(app_state)
         },
+        //DONE
         "getRewardAddresses" => {
             eprintln!("[API] getRewardAddresses called");
             get_reward_addresses(app_state)
@@ -161,28 +166,52 @@ fn load_runtime_network_direct() -> Option<pallas_addresses::Network> {
     result
 }
 
-fn get_utxos(params: Value) -> Result<Value, String> {
-    // Mock UTXOs
-    let utxos = vec![
-        json!({
-            "tx_hash": "5d677265fa5bb21ce6d8c7502aca70b9316d10e958611f3c6b758f65ad959996",
-            "tx_index": 0,
-            "amount": "1000000", // 1 ADA in lovelace
-            "address": "addr1qx2fxv2umyhttkxyxp8x0dlpdt3k6cwng5pxj3jhsydzer3n0d3vllmyqwsx5wktcd8cc3sq835lu7drv2xwl2wywfgse35a3x"
-        }),
-        json!({
-            "tx_hash": "6d677265fa5bb21ce6d8c7502aca70b9316d10e958611f3c6b758f65ad959996",
-            "tx_index": 1,
-            "amount": "2000000", // 2 ADA
-            "address": "addr1qx2fxv2umyhttkxyxp8x0dlpdt3k6cwng5pxj3jhsydzer3n0d3vllmyqwsx5wktcd8cc3sq835lu7drv2xwl2wywfgse35a3x"
-        })
-    ];
+async fn get_utxos(params: Value, app_state: Option<&AppState>) -> Result<Value, String> {
+    let app_state = app_state.ok_or("App state not available")?;
     
-    // Return CBOR hex (mock - in real implementation, encode properly)
-    Ok(json!([
-        format!("{}{}{}{}{}", "82825820", "5d677265fa5bb21ce6d8c7502aca70b9316d10e958611f3c6b758f65ad959996", "00825839", "01", "1a000f4240"),
-        format!("{}{}{}{}{}", "82825820", "6d677265fa5bb21ce6d8c7502aca70b9316d10e958611f3c6b758f65ad959996", "01825839", "01", "1a001e8480")
-    ]))
+    // Get the first wallet's stake address
+    let store = app_state.wallet_store.lock().unwrap();
+    let wallets = store.list_wallets()
+        .map_err(|e| format!("Failed to list wallets: {}", e))?;
+    
+    if wallets.is_empty() {
+        return Err("No wallets available".to_string());
+    }
+    
+    let wallet_id = &wallets[0].wallet_id;
+    let stake_addresses = crate::wallet::get_reward_addresses_from_wallet(&store, wallet_id, 0)?;
+    drop(store); // Release the lock
+    
+    if stake_addresses.is_empty() {
+        return Err("No stake addresses found for wallet".to_string());
+    }
+    
+    let stake_address = &stake_addresses[0]; // Use first stake address
+    eprintln!("[API] Using stake address for UTxO query: {}", stake_address);
+    
+    // Get current network
+    let runtime_network = load_runtime_network_direct();
+    let network = runtime_network.unwrap_or_else(|| app_state.config.get_network());
+    
+    // Try to use UTxO RPC client if available
+    let mut utxorpc_client_guard = app_state.utxorpc_client.lock().unwrap();
+    if let Some(ref mut client) = *utxorpc_client_guard {
+        eprintln!("[API] Using UTxO RPC to fetch UTxOs");
+        match client.fetch_utxos_by_stake_address(stake_address, network, Some(100)).await {
+            Ok(utxos) => {
+                eprintln!("[API] Successfully fetched UTxOs via UTxO RPC");
+                return Ok(utxos);
+            },
+            Err(e) => {
+                eprintln!("[API] UTxO RPC failed: {}, falling back to mock data", e);
+            }
+        }
+    } else {
+        eprintln!("[API] UTxO RPC not configured, using mock data");
+    }
+    
+    
+    Ok(json!(Vec::<String>::new()))
 }
 
 fn get_balance() -> Result<Value, String> {

@@ -177,6 +177,7 @@ pub fn get_reward_addresses_from_wallet(
     
     let staking_part = pallas_addresses::ShelleyDelegationPart::Key(staking_pubkey_hash);
     
+    //TODO: add more addresses and use account index in path
     addresses.push(staking_part.to_hex());
     
     Ok(addresses)

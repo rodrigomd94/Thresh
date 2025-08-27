@@ -6,6 +6,7 @@ use crate::crypto::{
 use crate::storage::wallet_store::{WalletStore, WalletMetadata};
 use crate::wallet::{WalletError, WalletResult, derive_addresses_from_wallet};
 use crate::config::AppConfig;
+use crate::utxorpc::UtxoRpcClient;
 use std::fs;
 use pallas_crypto::key::ed25519;
 use serde::{Deserialize, Serialize};
@@ -16,6 +17,7 @@ pub struct AppState {
     pub wallet_store: Mutex<WalletStore>,
     pub config: AppConfig,
     pub runtime_network: Mutex<Option<pallas_addresses::Network>>,
+    pub utxorpc_client: Mutex<Option<UtxoRpcClient>>,
 }
 
 impl AppState {
@@ -411,9 +413,26 @@ pub fn create_app_state() -> Result<AppState, String> {
     let wallet_store = WalletStore::new(data_dir)
         .map_err(|e| format!("Failed to create wallet store: {}", e))?;
     
+    // Initialize UTxO RPC client if configured
+    let utxorpc_client = if let Some(utxorpc_config) = &config.utxorpc {
+        // Use blocking runtime to initialize the async client
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        match rt.block_on(UtxoRpcClient::new(utxorpc_config.clone())) {
+            Ok(client) => Some(client),
+            Err(e) => {
+                eprintln!("Failed to initialize UTxO RPC client: {}", e);
+                eprintln!("UTxO RPC functionality will be disabled");
+                None
+            }
+        }
+    } else {
+        None
+    };
+    
     Ok(AppState {
         wallet_store: Mutex::new(wallet_store),
         config,
         runtime_network: Mutex::new(runtime_network),
+        utxorpc_client: Mutex::new(utxorpc_client),
     })
 }
