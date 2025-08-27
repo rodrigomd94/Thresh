@@ -18,13 +18,14 @@ pub async fn handle_cip30_request(method: &str, params: Value, app_state: Option
             eprintln!("[API] getNetworkId called");
             get_network_id(app_state)
         },
+        //DONE
         "getUtxos" => {
             eprintln!("[API] getUtxos called with params: {}", serde_json::to_string(&params).unwrap_or_else(|_| "Invalid JSON".to_string()));
             get_utxos(params, app_state).await
         },
         "getBalance" => {
             eprintln!("[API] getBalance called");
-            get_balance()
+            get_balance(app_state).await
         },
         //DONE
         "getUsedAddresses" => {
@@ -241,10 +242,83 @@ async fn get_utxos(params: Value, app_state: Option<&AppState>) -> Result<Value,
     Ok(json!(Vec::<String>::new()))
 }
 
-fn get_balance() -> Result<Value, String> {
-    // Mock balance: 3 ADA (in lovelace) as CBOR hex
-    // In real implementation, properly encode as CBOR
-    Ok(json!("1a002dc6c0")) // 3000000 lovelace
+async fn get_balance(app_state: Option<&AppState>) -> Result<Value, String> {
+    let app_state = app_state.ok_or("App state not available")?;
+    
+    // Get the first wallet (in a real implementation, this should be the connected wallet)
+    let store = app_state.wallet_store.lock().unwrap();
+    let wallets = store.list_wallets()
+        .map_err(|e| format!("Failed to list wallets: {}", e))?;
+    
+    if wallets.is_empty() {
+        return Err("No wallets available".to_string());
+    }
+    
+    let wallet_id = &wallets[0].wallet_id;
+
+    // Get current network
+    let runtime_network = load_runtime_network_direct();
+    let network = runtime_network.unwrap_or_else(|| app_state.config.get_network());
+    
+    // Get payment addresses from wallet (these hold UTxOs)
+    let payment_addresses = derive_addresses_from_wallet(&store, wallet_id, 0, 10, network)?;
+    drop(store); // Release the lock
+    
+    if payment_addresses.is_empty() {
+        return Err("No payment addresses found for wallet".to_string());
+    }
+    
+    // Convert payment addresses to hex format for UTxO RPC
+    let mut hex_addresses = Vec::new();
+    for addr_info in &payment_addresses {
+        match pallas_addresses::Address::from_bech32(&addr_info.address) {
+            Ok(addr) => {
+                let hex_addr = addr.to_hex();
+                hex_addresses.push(hex_addr);
+                eprintln!("[API] Added address for balance: {}", addr_info.address);
+            },
+            Err(e) => {
+                eprintln!("[API] Failed to convert address to hex for balance: {} - {}", addr_info.address, e);
+            }
+        }
+    }
+    
+    if hex_addresses.is_empty() {
+        return Err("No valid hex addresses for balance calculation".to_string());
+    }
+    
+    eprintln!("[API] Calculating balance from {} payment addresses", hex_addresses.len());
+    
+    // Try to use UTxO RPC client if available
+    if let Some(ref utxorpc_config) = app_state.config.utxorpc {
+        eprintln!("[API] Creating fresh UTxO RPC client for balance calculation");
+        match crate::utxorpc::UtxoRpcClient::new(utxorpc_config.clone()).await {
+            Ok(mut fresh_client) => {
+                eprintln!("[API] Fresh UTxO RPC client created, calculating balance");
+                match fresh_client.fetch_balance_from_addresses(&hex_addresses, network, Some(50)).await {
+                    Ok(balance_value) => {
+                        eprintln!("[API] Successfully calculated balance via UTxO RPC");
+                        
+                        // CBOR encode the balance Value
+                        let cbor_bytes = pallas_codec::minicbor::to_vec(&balance_value)
+                            .map_err(|e| format!("Failed to CBOR encode balance: {}", e))?;
+                        let cbor_hex = hex::encode(cbor_bytes);
+                        
+                        eprintln!("[API] Balance CBOR hex: {}", cbor_hex);
+                        return Ok(json!(cbor_hex));
+                    },
+                    Err(e) => {
+                        return Err(format!("UTxO RPC balance calculation failed: {}", e));
+                    }
+                }
+            },
+            Err(e) => {
+                return Err(format!("Failed to create UTxO RPC client for balance: {}", e));
+            }
+        }
+    } else {
+        return Err("UTxO RPC not configured - cannot calculate real balance".to_string());
+    }
 }
 
 async fn get_used_addresses(app_state: Option<&AppState>) -> Result<Value, String> {

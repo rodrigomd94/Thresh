@@ -198,6 +198,136 @@ impl UtxoRpcClient {
         Ok(json!(all_cip30_utxos))
     }
 
+    /// Fetch balance by exact addresses and return aggregated Value
+    pub async fn fetch_balance_from_addresses(
+        &mut self,
+        hex_addresses: &[String],
+        network: pallas_addresses::Network,
+        limit_per_address: Option<u32>,
+    ) -> Result<pallas_primitives::conway::Value, String> {
+        let client = match network {
+            pallas_addresses::Network::Mainnet => {
+                self.mainnet_client.as_mut()
+                    .ok_or("Mainnet UTxO RPC client not configured")?
+            },
+            _ => {
+                self.testnet_client.as_mut()
+                    .ok_or("Testnet UTxO RPC client not configured")?
+            }
+        };
+
+        eprintln!("[UTxO RPC] Calculating balance from {} addresses", hex_addresses.len());
+        
+        let mut total_ada: u64 = 0;
+        let mut asset_totals: std::collections::HashMap<(Vec<u8>, Vec<u8>), u64> = std::collections::HashMap::new();
+        let mut total_utxos_processed = 0;
+
+        for (i, hex_address) in hex_addresses.iter().enumerate() {
+            eprintln!("[UTxO RPC] Processing address {}/{} for balance: {}", i + 1, hex_addresses.len(), hex_address);
+
+            // Convert hex address to bytes
+            let address_bytes = match hex::decode(hex_address) {
+                Ok(bytes) => bytes,
+                Err(e) => {
+                    eprintln!("[UTxO RPC] Invalid hex address {}: {}", hex_address, e);
+                    continue; // Skip invalid addresses
+                }
+            };
+
+            // Create address pattern for exact address matching
+            let pattern = spec::cardano::TxOutputPattern {
+                address: Some(spec::cardano::AddressPattern {
+                    exact_address: address_bytes.into(),
+                    payment_part: Default::default(),
+                    delegation_part: Default::default(),
+                }),
+                asset: None,
+            };
+
+            // Fetch UTxOs for this address
+            let utxo_page = match client.match_utxos(pattern, None, limit_per_address.unwrap_or(100)).await {
+                Ok(page) => page,
+                Err(e) => {
+                    eprintln!("[UTxO RPC] Error fetching UTxOs for balance from address {}: {:?}", hex_address, e);
+                    continue; // Skip failed addresses
+                }
+            };
+
+            let utxos_count = utxo_page.items.len();
+            eprintln!("[UTxO RPC] Found {} UTxOs for balance from address {}", utxos_count, i + 1);
+            total_utxos_processed += utxos_count;
+
+            // Process each UTxO and accumulate values
+            for utxo in utxo_page.items {
+                if let Some(parsed_utxo) = utxo.parsed {
+                    // Add ADA amount
+                    total_ada += parsed_utxo.coin;
+                    
+                    // Add native assets
+                    for multiasset in parsed_utxo.assets {
+                        let policy_id = multiasset.policy_id.clone();
+                        
+                        // Each multiasset contains multiple assets for the same policy
+                        for asset in multiasset.assets {
+                            let key = (policy_id.clone().to_vec(), asset.name.clone().to_vec());
+                            // Use output_coin for the amount (mint_coin is for minting operations)
+                            *asset_totals.entry(key).or_insert(0) += asset.output_coin;
+                        }
+                    }
+                }
+            }
+        }
+
+        eprintln!("[UTxO RPC] Balance calculation complete: {} ADA, {} asset types from {} UTxOs", 
+                 total_ada, asset_totals.len(), total_utxos_processed);
+
+        // Create the final Value
+        if asset_totals.is_empty() {
+            Ok(pallas_primitives::conway::Value::Coin(total_ada))
+        } else {
+            // Convert asset totals to multiasset format
+            use std::collections::BTreeMap;
+            let mut policies: BTreeMap<pallas_primitives::PolicyId, BTreeMap<pallas_primitives::AssetName, u64>> = BTreeMap::new();
+            
+            for ((policy_id, asset_name), amount) in asset_totals {
+                // Convert Vec<u8> to fixed-size array for PolicyId
+                let policy_bytes: [u8; 28] = if policy_id.len() == 28 {
+                    let mut bytes = [0u8; 28];
+                    bytes.copy_from_slice(&policy_id);
+                    bytes
+                } else {
+                    eprintln!("[UTxO RPC] Invalid policy ID length: {} bytes, expected 28", policy_id.len());
+                    continue;
+                };
+                let policy = pallas_primitives::PolicyId::from(policy_bytes);
+                
+                // AssetName can be variable length (0-32 bytes)
+                let name = pallas_primitives::AssetName::from(asset_name);
+                policies.entry(policy).or_insert_with(BTreeMap::new).insert(name, amount);
+            }
+            
+            // Convert to NonEmptyKeyValuePairs
+            let mut policy_pairs = Vec::new();
+            for (policy_id, assets) in policies {
+                let mut asset_pairs = Vec::new();
+                for (asset_name, amount) in assets {
+                    asset_pairs.push((asset_name, pallas_primitives::PositiveCoin::try_from(amount).map_err(|e| format!("Invalid coin amount: {}", e))?));
+                }
+                if let Ok(assets_map) = pallas_primitives::NonEmptyKeyValuePairs::try_from(asset_pairs) {
+                    policy_pairs.push((policy_id, assets_map));
+                }
+            }
+            
+            if policy_pairs.is_empty() {
+                Ok(pallas_primitives::conway::Value::Coin(total_ada))
+            } else {
+                let multiasset = pallas_primitives::NonEmptyKeyValuePairs::try_from(policy_pairs)
+                    .map_err(|e| format!("Failed to create multiasset: {:?}", e))?;
+                Ok(pallas_primitives::conway::Value::Multiasset(total_ada, multiasset))
+            }
+        }
+    }
+
     /// Convert UTxO RPC response to CIP-30 CBOR hex format (static method to avoid borrow issues)
     fn convert_utxos_to_cip30_format(
         utxos: Vec<utxorpc::ChainUtxo<TxOutput>>
