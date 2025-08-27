@@ -7,7 +7,7 @@
   // Create wallet API object
   const tauriWallet = {
     apiVersion: '1.0.0',
-    name: 'Tauri Wallet',
+    name: 'Thresh',
     icon: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAA7AAAAOwBeShxvQAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAGRSURBVFiF7Zi/SsRAFMQ/V3gIgoUgCIJgYSEIgoWNhY2FjYWNhZ2dYGNhY2FjYWNhY2Hj38bGwsbCxsLGQhAEQRAEQRAEQfC4goV7l71kk+zuzSaZB8MdZHZnZt/bTQKEYRhGsZTdDqAITANTwCQwDowBo8Bwa0yCQeBLa3xpnfuo9b8BjcAqAFeS5pKMOkkNSTVJD5Juku4k3Um6k/Qg6SGI9yBpIalSYI5xkuaSSgXPl8wAcBJkfwFo9pm9/+xJTWrWBQyA48D5DbgGNoEtYBvYaY2dwLkBnLVyZaoKmATGW88jwAjQC1SSJm2R1PNhJEnhEHJRdbuJdgOo0rwfVGk20VUguMmcB849tJvoCrAVODfIDQOdBvbx7kBbgQfavyi9NOQasEfzajQCrHa64hE6DezQbKBT4DJLoLcFukUD7QJPeSfwtkBNUr1NQWuSupJ2MJJxRruBX0nveSfJ00CDuMQlLnGJS1ziEpe4xOVfE2fm/5FYAB6BF+AtS9Ck7H4QDMOIL1/iipQoefgdLgAAAABJRU5ErkJggg==',
     supportedExtensions: [],
     
@@ -140,25 +140,25 @@
       // Listen for response
       const handler = (event) => {
         if (event.detail && event.detail.messageId === messageId) {
-          window.removeEventListener('tauri_wallet_response', handler);
+          window.removeEventListener('thresh_response', handler);
           resolve(event.detail.data);
         }
       };
       
-      window.addEventListener('tauri_wallet_response', handler);
+      window.addEventListener('thresh_response', handler);
       
       // Send message
-      window.dispatchEvent(new CustomEvent('tauri_wallet_request', {
+      window.dispatchEvent(new CustomEvent('thresh_request', {
         detail: { ...data, messageId }
       }));
     });
   }
 
   // Register the wallet
-  window.cardano.tauri_wallet = tauriWallet;
+  window.cardano.thresh = tauriWallet;
 
   // Dispatch event to notify that wallet is available
   window.dispatchEvent(new Event('cardano_wallet_loaded'));
   
-  console.log('[Tauri Wallet] Injected wallet API successfully');
+  console.log('[Thresh] Injected wallet API successfully');
 })();

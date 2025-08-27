@@ -1,6 +1,6 @@
 {
-  "name": "com.cardano.tauri_wallet",
-  "description": "Tauri-based Cardano Wallet Native Messaging Host",
+  "name": "com.cardano.thresh",
+  "description": "Thresh Cardano Wallet Native Messaging Host",
   "path": "/usr/local/bin/cip-30-wallet",
   "type": "stdio",
   "allowed_origins": [

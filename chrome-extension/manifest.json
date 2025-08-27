@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Tauri Cardano Wallet",
+  "name": "Thresh Cardano Wallet",
   "version": "1.0.0",
-  "description": "A Cardano wallet that communicates with a local Tauri app",
+  "description": "A Cardano browser extension that communicates with Thresh Desktop Cardano Wallet",
   "permissions": [
     "nativeMessaging",
     "activeTab",

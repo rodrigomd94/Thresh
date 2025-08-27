@@ -1,7 +1,7 @@
 // Content script - Injects CIP-30 API into web pages
 
 // Create a custom event for communication between injected script and content script
-const WALLET_NAME = 'tauri_wallet';
+const WALLET_NAME = 'thresh';
 
 // Inject the wallet API script into the page
 function injectScript() {
@@ -15,7 +15,7 @@ function injectScript() {
 }
 
 // Listen for messages from the injected script
-window.addEventListener('tauri_wallet_request', async (event) => {
+window.addEventListener('thresh_request', async (event) => {
   const request = event.detail;
   
   try {
@@ -26,7 +26,7 @@ window.addEventListener('tauri_wallet_request', async (event) => {
     });
     
     // Send response back to injected script
-    window.dispatchEvent(new CustomEvent('tauri_wallet_response', {
+    window.dispatchEvent(new CustomEvent('thresh_response', {
       detail: {
         messageId: request.messageId,
         data: response
@@ -34,7 +34,7 @@ window.addEventListener('tauri_wallet_request', async (event) => {
     }));
   } catch (error) {
     // Send error back to injected script
-    window.dispatchEvent(new CustomEvent('tauri_wallet_response', {
+    window.dispatchEvent(new CustomEvent('thresh_response', {
       detail: {
         messageId: request.messageId,
         data: { error: error.message }
@@ -44,17 +44,17 @@ window.addEventListener('tauri_wallet_request', async (event) => {
 });
 
 // Debug logging
-console.log('[Tauri Wallet] Content script loaded on:', window.location.href);
+console.log('[Thresh] Content script loaded on:', window.location.href);
 
 // Inject script as soon as possible
 injectScript();
 
 // Debug: Check if injection worked
 setTimeout(() => {
-  console.log('[Tauri Wallet] window.cardano after injection:', window.cardano);
-  if (window.cardano && window.cardano.tauri_wallet) {
-    console.log('[Tauri Wallet] tauri_wallet found:', window.cardano.tauri_wallet);
+  console.log('[Thresh] window.cardano after injection:', window.cardano);
+  if (window.cardano && window.cardano.thresh) {
+    console.log('[Thresh] thresh found:', window.cardano.thresh);
   } else {
-    console.log('[Tauri Wallet] tauri_wallet NOT found');
+    console.log('[Thresh] thresh NOT found');
   }
 }, 100);

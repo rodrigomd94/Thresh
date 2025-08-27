@@ -14,20 +14,20 @@ function updateStatus(connected, message) {
   const connectBtn = document.getElementById('connect-btn');
   const nativeInfo = document.getElementById('native-app-info');
   
-  statusText.textContent = message || (connected ? 'Connected to Tauri app' : 'Tauri app not found');
+  statusText.textContent = message || (connected ? 'Connected to Thresh app' : 'Thresh app not found');
   
   if (connected) {
     statusEl.classList.remove('disconnected');
     statusEl.classList.add('connected');
     connectBtn.textContent = 'Reconnect';
     connectBtn.disabled = false;
-    nativeInfo.textContent = 'Native messaging host: com.cardano.tauri_wallet';
+    nativeInfo.textContent = 'Native messaging host: com.cardano.thresh';
   } else {
     statusEl.classList.remove('connected');
     statusEl.classList.add('disconnected');
-    connectBtn.textContent = 'Connect to Tauri App';
+    connectBtn.textContent = 'Connect to Thresh App';
     connectBtn.disabled = false;
-    nativeInfo.textContent = 'Make sure the Tauri wallet app is installed and registered.';
+    nativeInfo.textContent = 'Make sure the Thresh wallet app is installed and registered.';
   }
 }
 

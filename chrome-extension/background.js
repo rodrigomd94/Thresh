@@ -1,6 +1,6 @@
 // Background script - Handles native messaging with Tauri app
 
-const NATIVE_HOST_NAME = 'com.cardano.tauri_wallet';
+const NATIVE_HOST_NAME = 'com.cardano.thresh';
 let nativePort = null;
 let isConnected = false;
 let pendingRequests = new Map(); // Store pending requests
@@ -102,7 +102,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     case 'check_connection':
       sendResponse({ 
         connected: isConnected, 
-        message: isConnected ? 'Connected to Tauri app' : 'Not connected' 
+        message: isConnected ? 'Connected to Thresh app' : 'Not connected' 
       });
       break;
       
@@ -114,7 +114,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       setTimeout(() => {
         sendResponse({ 
           connected: isConnected, 
-          message: isConnected ? 'Connected to Tauri app' : 'Failed to connect' 
+          message: isConnected ? 'Connected to Thresh app' : 'Failed to connect' 
         });
       }, 1000);
       return true; // Keep channel open for async response
@@ -156,7 +156,7 @@ async function handleCIP30Request(request, origin) {
     await new Promise(resolve => setTimeout(resolve, 1000));
     
     if (!isConnected) {
-      throw new Error('Cannot connect to Tauri wallet app');
+      throw new Error('Cannot connect to Thresh wallet app');
     }
   }
   
