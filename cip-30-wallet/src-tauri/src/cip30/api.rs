@@ -180,36 +180,52 @@ async fn get_utxos(params: Value, app_state: Option<&AppState>) -> Result<Value,
     
     let wallet_id = &wallets[0].wallet_id;
 
-    let runtime_network = load_runtime_network_direct();
-    let network = runtime_network.unwrap_or_else(|| app_state.config.get_network());
-    
-    let stake_addresses = crate::wallet::get_reward_addresses_from_wallet(&store, wallet_id, 0, network)?;
-    drop(store); // Release the lock
-    
-    if stake_addresses.is_empty() {
-        return Err("No stake addresses found for wallet".to_string());
-    }
-    
-    let stake_address = &stake_addresses[0]; // Use first stake address
-    eprintln!("[API] Using stake address for UTxO query: {}", stake_address);
-    
     // Get current network
     let runtime_network = load_runtime_network_direct();
     let network = runtime_network.unwrap_or_else(|| app_state.config.get_network());
+    
+    // Get payment addresses from wallet (these hold UTxOs, not stake addresses)
+    let payment_addresses = derive_addresses_from_wallet(&store, wallet_id, 0, 10, network)?;
+    drop(store); // Release the lock
+    
+    if payment_addresses.is_empty() {
+        return Err("No payment addresses found for wallet".to_string());
+    }
+    
+    // Convert payment addresses to hex format for UTxO RPC
+    let mut hex_addresses = Vec::new();
+    for addr_info in &payment_addresses {
+        match pallas_addresses::Address::from_bech32(&addr_info.address) {
+            Ok(addr) => {
+                let hex_addr = addr.to_hex();
+                hex_addresses.push(hex_addr);
+                eprintln!("[API] Added payment address: {} (hex: {})", addr_info.address, hex_addresses.last().unwrap());
+            },
+            Err(e) => {
+                eprintln!("[API] Failed to convert address to hex: {} - {}", addr_info.address, e);
+            }
+        }
+    }
+    
+    if hex_addresses.is_empty() {
+        return Err("No valid hex addresses for UTxO query".to_string());
+    }
+    
+    eprintln!("[API] Using {} payment addresses for UTxO query", hex_addresses.len());
     
     // Try to use UTxO RPC client if available
     if let Some(ref utxorpc_config) = app_state.config.utxorpc {
         eprintln!("[API] Creating fresh UTxO RPC client for request");
         match crate::utxorpc::UtxoRpcClient::new(utxorpc_config.clone()).await {
             Ok(mut fresh_client) => {
-                eprintln!("[API] Fresh UTxO RPC client created, fetching UTxOs");
-                match fresh_client.fetch_utxos_by_stake_address(stake_address, network, Some(100)).await {
+                eprintln!("[API] Fresh UTxO RPC client created, fetching UTxOs from {} addresses", hex_addresses.len());
+                match fresh_client.fetch_utxos_by_exact_addresses(&hex_addresses, network, Some(50)).await {
                     Ok(utxos) => {
-                        eprintln!("[API] Successfully fetched UTxOs via fresh UTxO RPC client");
+                        eprintln!("[API] Successfully fetched UTxOs via exact addresses UTxO RPC");
                         return Ok(utxos);
                     },
                     Err(e) => {
-                        eprintln!("[API] Fresh UTxO RPC failed: {}, falling back to mock data", e);
+                        eprintln!("[API] UTxO RPC by exact addresses failed: {}, falling back to mock data", e);
                     }
                 }
             },
