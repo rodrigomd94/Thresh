@@ -8,6 +8,7 @@ pub fn derive_addresses_from_wallet(
     wallet_id: &str,
     account_index: u32,
     count: u32,
+    network: pallas_addresses::Network,
 ) -> Result<Vec<AddressInfo>, String> {
     // Get wallet metadata with public key
     let wallets = wallet_store.list_wallets()
@@ -39,7 +40,6 @@ pub fn derive_addresses_from_wallet(
     let staking_pubkey_bytes = staking_key.to_bytes();
     
     let mut addresses = Vec::new();
-    let network = pallas_addresses::Network::Mainnet;
     
     // Derive each address
     for i in 0..count {

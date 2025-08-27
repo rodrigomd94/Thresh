@@ -5,13 +5,25 @@ use crate::crypto::{
 };
 use crate::storage::wallet_store::{WalletStore, WalletMetadata};
 use crate::wallet::{WalletError, WalletResult, derive_addresses_from_wallet};
+use crate::config::AppConfig;
+use std::fs;
 use pallas_crypto::key::ed25519;
 use serde::{Deserialize, Serialize};
 use std::{hash::Hash, sync::Mutex};
 use tauri::State;
-/// Application state to hold the wallet store
+/// Application state to hold the wallet store and configuration
 pub struct AppState {
     pub wallet_store: Mutex<WalletStore>,
+    pub config: AppConfig,
+    pub runtime_network: Mutex<Option<pallas_addresses::Network>>,
+}
+
+impl AppState {
+    /// Get the active network - UI override takes precedence over config file
+    pub fn get_active_network(&self) -> pallas_addresses::Network {
+        self.runtime_network.lock().unwrap()
+            .unwrap_or(self.config.get_network())
+    }
 }
 
 /// Extended wallet metadata with master public key for address derivation
@@ -187,7 +199,8 @@ pub async fn derive_address_from_wallet(
     let store = state.wallet_store.lock().unwrap();
     
     // Use shared function to derive addresses, then return the specific one
-    let addresses = derive_addresses_from_wallet(&store, &wallet_id, account_index, address_index + 1)?;
+    let network = state.get_active_network();
+    let addresses = derive_addresses_from_wallet(&store, &wallet_id, account_index, address_index + 1, network)?;
     
     // Return the address at the requested index
     addresses.into_iter()
@@ -204,7 +217,110 @@ pub async fn get_addresses_from_wallet(
     state: State<'_, AppState>
 ) -> Result<Vec<AddressInfo>, String> {
     let store = state.wallet_store.lock().unwrap();
-    derive_addresses_from_wallet(&store, &wallet_id, account_index, count)
+    let network = state.get_active_network();
+    derive_addresses_from_wallet(&store, &wallet_id, account_index, count, network)
+}
+
+// Network Configuration Commands
+
+#[tauri::command]
+pub async fn get_current_network(state: State<'_, AppState>) -> Result<String, String> {
+    let network = state.get_active_network();
+    let network_name = match network {
+        pallas_addresses::Network::Mainnet => "mainnet",
+        pallas_addresses::Network::Testnet => "testnet",
+        pallas_addresses::Network::Other(_) => "testnet",
+    };
+    Ok(network_name.to_string())
+}
+
+#[tauri::command]
+pub async fn set_runtime_network(
+    network: String, 
+    state: State<'_, AppState>
+) -> Result<(), String> {
+    let pallas_network = match network.to_lowercase().as_str() {
+        "mainnet" => pallas_addresses::Network::Mainnet,
+        "testnet" => pallas_addresses::Network::Testnet,
+        _ => return Err(format!("Invalid network: {}", network)),
+    };
+    
+    // Set runtime network in memory
+    let mut runtime_network = state.runtime_network.lock().unwrap();
+    *runtime_network = Some(pallas_network);
+    
+    // Also save to a runtime file so native messaging can pick it up
+    save_runtime_network(&network)?;
+    
+    eprintln!("Runtime network set to: {}", network);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn save_network_to_config(
+    network: String,
+    state: State<'_, AppState>
+) -> Result<(), String> {
+    // Validate network
+    match network.to_lowercase().as_str() {
+        "mainnet" | "testnet" => {},
+        _ => return Err(format!("Invalid network: {}", network)),
+    }
+    
+    // Update the config
+    let mut updated_config = state.config.clone();
+    updated_config.network.name = network.to_lowercase();
+    
+    // Save to file
+    let config_path = AppConfig::default_config_path()
+        .map_err(|e| format!("Failed to get config path: {}", e))?;
+    updated_config.save(&config_path)
+        .map_err(|e| format!("Failed to save config: {}", e))?;
+    
+    eprintln!("Network saved to config: {}", network);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn reset_runtime_network(state: State<'_, AppState>) -> Result<(), String> {
+    let mut runtime_network = state.runtime_network.lock().unwrap();
+    *runtime_network = None;
+    
+    // Remove the runtime file
+    clear_runtime_network()?;
+    
+    eprintln!("Runtime network reset to config default");
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn get_app_config(state: State<'_, AppState>) -> Result<AppConfig, String> {
+    Ok(state.config.clone())
+}
+
+#[tauri::command]
+pub async fn get_network_info(state: State<'_, AppState>) -> Result<serde_json::Value, String> {
+    let active_network = state.get_active_network();
+    let config_network = state.config.get_network();
+    let runtime_override = state.runtime_network.lock().unwrap().is_some();
+    
+    let active_name = match active_network {
+        pallas_addresses::Network::Mainnet => "mainnet",
+        pallas_addresses::Network::Testnet => "testnet",
+        pallas_addresses::Network::Other(_) => "testnet",
+    };
+    
+    let config_name = match config_network {
+        pallas_addresses::Network::Mainnet => "mainnet", 
+        pallas_addresses::Network::Testnet => "testnet",
+        pallas_addresses::Network::Other(_) => "testnet",
+    };
+    
+    Ok(serde_json::json!({
+        "active": active_name,
+        "config_default": config_name,
+        "has_runtime_override": runtime_override
+    }))
 }
 
 // Utility Commands
@@ -224,8 +340,71 @@ pub async fn validate_wallet_password(
     }
 }
 
+// Helper functions for runtime network persistence
+fn get_runtime_network_path() -> Result<std::path::PathBuf, String> {
+    let data_dir = dirs::data_dir()
+        .ok_or("Failed to get data directory")?;
+    Ok(data_dir.join("cip-30-wallet").join("runtime_network.txt"))
+}
+
+fn save_runtime_network(network: &str) -> Result<(), String> {
+    let path = get_runtime_network_path()?;
+    
+    // Create parent directory if it doesn't exist
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create runtime config directory: {}", e))?;
+    }
+    
+    fs::write(&path, network)
+        .map_err(|e| format!("Failed to save runtime network: {}", e))?;
+    
+    eprintln!("Saved runtime network '{}' to {:?}", network, path);
+    Ok(())
+}
+
+fn load_runtime_network() -> Option<pallas_addresses::Network> {
+    let path = get_runtime_network_path().ok()?;
+    
+    if !path.exists() {
+        return None;
+    }
+    
+    let content = fs::read_to_string(&path).ok()?;
+    let network_name = content.trim();
+    
+    eprintln!("Loaded runtime network '{}' from {:?}", network_name, path);
+    
+    match network_name.to_lowercase().as_str() {
+        "mainnet" => Some(pallas_addresses::Network::Mainnet),
+        "testnet" => Some(pallas_addresses::Network::Testnet),
+        _ => None,
+    }
+}
+
+fn clear_runtime_network() -> Result<(), String> {
+    let path = get_runtime_network_path()?;
+    
+    if path.exists() {
+        fs::remove_file(&path)
+            .map_err(|e| format!("Failed to remove runtime network file: {}", e))?;
+        eprintln!("Cleared runtime network file at {:?}", path);
+    }
+    
+    Ok(())
+}
+
 // Helper function to initialize app state
 pub fn create_app_state() -> Result<AppState, String> {
+    // Load configuration
+    let config_path = AppConfig::default_config_path()
+        .map_err(|e| format!("Failed to get config path: {}", e))?;
+    let config = AppConfig::load_or_create(&config_path)
+        .map_err(|e| format!("Failed to load configuration: {}", e))?;
+    
+    // Load runtime network override if it exists
+    let runtime_network = load_runtime_network();
+    
     let data_dir = WalletStore::default_data_dir()
         .map_err(|e| format!("Failed to get data directory: {}", e))?;
     
@@ -234,5 +413,7 @@ pub fn create_app_state() -> Result<AppState, String> {
     
     Ok(AppState {
         wallet_store: Mutex::new(wallet_store),
+        config,
+        runtime_network: Mutex::new(runtime_network),
     })
 }

@@ -1,0 +1,7 @@
+[network]
+name = "mainnet"  # Options: "mainnet" or "testnet"
+
+# Optional UTXO RPC configuration for blockchain data
+# [utxorpc]
+# url = "https://utxorpc-v1.demeter.run"
+# api_key = "your-api-key-here"

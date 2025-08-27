@@ -15,7 +15,7 @@ pub async fn handle_cip30_request(method: &str, params: Value, app_state: Option
         },
         "getNetworkId" => {
             eprintln!("[API] getNetworkId called");
-            get_network_id()
+            get_network_id(app_state)
         },
         "getUtxos" => {
             eprintln!("[API] getUtxos called with params: {}", serde_json::to_string(&params).unwrap_or_else(|_| "Invalid JSON".to_string()));
@@ -71,9 +71,94 @@ fn get_extensions() -> Result<Value, String> {
     Ok(json!([]))
 }
 
-fn get_network_id() -> Result<Value, String> {
-    // 1 = mainnet, 0 = testnet
-    Ok(json!(1))
+fn get_network_id(app_state: Option<&AppState>) -> Result<Value, String> {
+    eprintln!("[API] getNetworkId called");
+    
+    let app_state = match app_state {
+        Some(state) => state,
+        None => {
+            eprintln!("[API] ERROR: App state not available");
+            return Err("App state not available".to_string());
+        }
+    };
+    
+    // Force reload of runtime network to pick up UI changes
+    eprintln!("[API] Loading runtime network...");
+    let runtime_network = load_runtime_network_direct();
+    eprintln!("[API] Runtime network result: {:?}", runtime_network);
+    
+    // Use runtime override if available, otherwise fall back to config
+    let network = runtime_network.unwrap_or_else(|| {
+        eprintln!("[API] No runtime network, using config default");
+        app_state.config.get_network()
+    });
+    
+    eprintln!("[API] Final network to use: {:?}", network);
+    
+    // CIP-30 specification: 1 = mainnet, 0 = testnet (return just the number)
+    let network_id = match network {
+        pallas_addresses::Network::Mainnet => {
+            eprintln!("[API] Network is Mainnet, returning 1");
+            1
+        },
+        pallas_addresses::Network::Testnet => {
+            eprintln!("[API] Network is Testnet, returning 0");
+            0
+        },
+        pallas_addresses::Network::Other(n) => {
+            eprintln!("[API] Network is Other({}), returning 0", n);
+            0
+        }
+    };
+    
+    eprintln!("[API] About to return network ID: {}", network_id);
+    let result = Ok(json!(network_id));
+    eprintln!("[API] Final result: {:?}", result);
+    result
+}
+
+// Helper function to directly load runtime network (for CIP-30 API)
+fn load_runtime_network_direct() -> Option<pallas_addresses::Network> {
+    let data_dir = dirs::data_dir()?;
+    let path = data_dir.join("cip-30-wallet").join("runtime_network.txt");
+    
+    eprintln!("[API] Checking runtime network file at: {:?}", path);
+    
+    if !path.exists() {
+        eprintln!("[API] No runtime network file found at {:?}", path);
+        return None;
+    }
+    
+    let content = match std::fs::read_to_string(&path) {
+        Ok(content) => content,
+        Err(e) => {
+            eprintln!("[API] Failed to read runtime network file: {}", e);
+            return None;
+        }
+    };
+    
+    let network_name = content.trim();
+    eprintln!("[API] Raw file content: '{}'", content);
+    eprintln!("[API] Trimmed network name: '{}'", network_name);
+    eprintln!("[API] Network name length: {}", network_name.len());
+    
+    let result = match network_name.to_lowercase().as_str() {
+        "mainnet" => {
+            eprintln!("[API] Matched mainnet");
+            Some(pallas_addresses::Network::Mainnet)
+        },
+        "testnet" => {
+            eprintln!("[API] Matched testnet");
+            Some(pallas_addresses::Network::Testnet)
+        },
+        other => {
+            eprintln!("[API] Unknown network: '{}'", other);
+            None
+        }
+    };
+    
+    eprintln!("[API] Returning network: {:?}", result);
+    result
 }
 
 fn get_utxos(params: Value) -> Result<Value, String> {
@@ -120,8 +205,12 @@ async fn get_used_addresses(app_state: Option<&AppState>) -> Result<Value, Strin
     
     let wallet_id = &wallets[0].wallet_id;
     
-    // Use the shared address derivation function
-    let addresses = derive_addresses_from_wallet(&store, wallet_id, 0, 5)?;
+    // Force reload of runtime network to pick up UI changes
+    let runtime_network = load_runtime_network_direct();
+    let network = runtime_network.unwrap_or_else(|| app_state.config.get_network());
+    
+    eprintln!("[API] get_used_addresses using network: {:?}", network);
+    let addresses = derive_addresses_from_wallet(&store, wallet_id, 0, 5, network)?;
     
     // Convert addresses to hex format for CIP-30
     let hex_addresses: Vec<String> = addresses
@@ -150,8 +239,12 @@ async fn get_unused_addresses(app_state: Option<&AppState>) -> Result<Value, Str
     
     let wallet_id = &wallets[0].wallet_id;
     
-    // Use the shared address derivation function
-    let addresses = derive_addresses_from_wallet(&store, wallet_id, 0, 5)?;
+    // Force reload of runtime network to pick up UI changes
+    let runtime_network = load_runtime_network_direct();
+    let network = runtime_network.unwrap_or_else(|| app_state.config.get_network());
+    
+    eprintln!("[API] get_unused_addresses using network: {:?}", network);
+    let addresses = derive_addresses_from_wallet(&store, wallet_id, 0, 5, network)?;
     
     // Convert addresses to hex format for CIP-30
     let hex_addresses: Vec<String> = addresses

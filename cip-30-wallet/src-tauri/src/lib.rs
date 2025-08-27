@@ -4,6 +4,7 @@ mod wallet;
 mod crypto;
 mod storage;
 mod commands;
+mod config;
 
 use native_messaging::{NativeMessage, start_native_messaging, send_message};
 use cip30::handle_cip30_request;
@@ -39,6 +40,13 @@ pub fn run() {
             // Address derivation commands
             derive_address_from_wallet,
             get_addresses_from_wallet,
+            // Network configuration commands
+            get_current_network,
+            set_runtime_network,
+            save_network_to_config,
+            reset_runtime_network,
+            get_app_config,
+            get_network_info,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

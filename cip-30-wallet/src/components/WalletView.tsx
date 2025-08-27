@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Copy, Wallet, RefreshCw, ArrowLeft } from 'lucide-react';
+import { NetworkIndicator } from './NetworkIndicator';
+import { NetworkSettings } from './NetworkSettings';
 
 interface AddressInfo {
   address: string;
@@ -25,10 +27,12 @@ export function WalletView({ walletId, walletName, onBack, isNewWallet = false }
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
+  const [showNetworkSettings, setShowNetworkSettings] = useState(false);
+  const [networkRefresh, setNetworkRefresh] = useState(0);
 
   useEffect(() => {
     loadAddresses();
-  }, [walletId]);
+  }, [walletId, networkRefresh]);
 
   const loadAddresses = async () => {
     try {
@@ -68,6 +72,11 @@ export function WalletView({ walletId, walletName, onBack, isNewWallet = false }
     return address;
   };
 
+  const handleNetworkChanged = () => {
+    // Trigger refresh of addresses and network indicator
+    setNetworkRefresh(prev => prev + 1);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -101,6 +110,10 @@ export function WalletView({ walletId, walletName, onBack, isNewWallet = false }
                 {isNewWallet ? 'Your Cardano wallet is ready! Here are your first addresses.' : 'Your Cardano wallet addresses (public key derivation only)'}
               </CardDescription>
             </div>
+            <NetworkIndicator 
+              onOpenSettings={() => setShowNetworkSettings(true)}
+              refreshTrigger={networkRefresh}
+            />
           </div>
         </CardHeader>
         
@@ -209,6 +222,16 @@ export function WalletView({ walletId, walletName, onBack, isNewWallet = false }
           </Alert>
         </CardContent>
       </Card>
+
+      {/* Network Settings Modal */}
+      {showNetworkSettings && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <NetworkSettings 
+            onClose={() => setShowNetworkSettings(false)}
+            onNetworkChanged={handleNetworkChanged}
+          />
+        </div>
+      )}
     </div>
   );
 }

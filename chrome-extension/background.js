@@ -171,7 +171,8 @@ async function handleCIP30Request(request, origin) {
       throw new Error(response.error);
     }
     
-    return response.data || response;
+    // Check if data exists (including 0, false, null values)
+    return response.hasOwnProperty('data') ? response.data : response;
   } catch (error) {
     console.error('Native messaging error:', error);
     throw error;
