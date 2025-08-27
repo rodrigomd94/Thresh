@@ -139,3 +139,45 @@ pub fn get_change_address_from_wallet(
         address_index: 0,
     })
 }
+
+pub fn get_reward_addresses_from_wallet(
+    wallet_store: &WalletStore,
+    wallet_id: &str,
+    account_index: u32,
+) -> Result<Vec<String>, String> {
+    // Get wallet metadata with public key
+    let wallets = wallet_store.list_wallets()
+        .map_err(|e| format!("Failed to list wallets: {}", e))?;
+    
+    let wallet_meta = wallets.iter()
+        .find(|w| w.wallet_id == wallet_id)
+        .ok_or_else(|| "Wallet not found".to_string())?;
+    
+    // Create account-level public key from stored bytes (already at m/1852'/1815'/0')
+    let mut key_bytes = [0u8; 64];
+    if wallet_meta.master_public_key.len() != 64 {
+        return Err("Invalid public key length".to_string());
+    }
+    key_bytes.copy_from_slice(&wallet_meta.master_public_key);
+    
+    let account_public_key = Bip32PublicKey::from_extended_bytes(&key_bytes)
+        .map_err(|e| format!("Failed to create account public key: {}", e))?;
+   
+    // Derive staking key once (same for all addresses in the account)
+    let staking_chain = account_public_key.derive(2)
+        .map_err(|e| format!("Failed to derive staking chain: {}", e))?;
+    let staking_key = staking_chain.derive(0)
+        .map_err(|e| format!("Failed to derive staking key: {}", e))?;
+    let staking_pubkey_bytes = staking_key.to_bytes();
+    
+    let mut addresses: Vec<String> = Vec::new();
+    
+    let staking_pubkey_hash = pallas_crypto::hash::Hasher::<224>::hash(&staking_pubkey_bytes);
+   // let staking_part = pallas_addresses::StakePayload::Stake(staking_pubkey_hash);
+    
+    let staking_part = pallas_addresses::ShelleyDelegationPart::Key(staking_pubkey_hash);
+    
+    addresses.push(staking_part.to_hex());
+    
+    Ok(addresses)
+}
