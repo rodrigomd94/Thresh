@@ -222,8 +222,17 @@ mod tests {
         let wallet_id = WalletStore::generate_wallet_id();
         let password = "test_password_123";
 
+        // Derive master public key for storage
+        let seed = crate::crypto::mnemonic::mnemonic_to_seed(&mnemonic, "").unwrap();
+        let master_private_key = crate::crypto::keys::Bip32PrivateKey::from_bip39_seed(&seed).unwrap();
+        let account_key = master_private_key
+            .derive(1852 | 0x80000000)  // purpose
+            .derive(1815 | 0x80000000)  // coin_type
+            .derive(0 | 0x80000000);    // account
+        let master_public_key = account_key.to_public().to_extended_bytes();
+
         // Save wallet
-        store.save_wallet(&wallet_id, &wallet, password).unwrap();
+        store.save_wallet(&wallet_id, &wallet, password, &master_public_key).unwrap();
         
         // Check wallet exists
         assert!(store.wallet_exists(&wallet_id));

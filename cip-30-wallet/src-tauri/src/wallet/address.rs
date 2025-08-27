@@ -144,6 +144,8 @@ pub fn get_reward_addresses_from_wallet(
     wallet_store: &WalletStore,
     wallet_id: &str,
     account_index: u32,
+    network: pallas_addresses::Network,
+
 ) -> Result<Vec<String>, String> {
     // Get wallet metadata with public key
     let wallets = wallet_store.list_wallets()
@@ -176,9 +178,15 @@ pub fn get_reward_addresses_from_wallet(
    // let staking_part = pallas_addresses::StakePayload::Stake(staking_pubkey_hash);
     
     let staking_part = pallas_addresses::ShelleyDelegationPart::Key(staking_pubkey_hash);
-    
+    //prefix e0 or e1 depending on network (e0 = testnet, e1 = mainnet)
+    let prefix = match network {
+       pallas_addresses::Network::Mainnet => "e1",
+       pallas_addresses::Network::Testnet => "e0",
+       _ => "e0", // Default to testnet prefix
+    };
+    let  reward_address_hex = format!("{}{}", prefix, hex::encode(staking_pubkey_hash));
     //TODO: add more addresses and use account index in path
-    addresses.push(staking_part.to_hex());
+    addresses.push(reward_address_hex);
     
     Ok(addresses)
 }

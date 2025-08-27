@@ -19,40 +19,50 @@ impl UtxoRpcClient {
 
         // Create mainnet client if URL is provided
         if let Some(mainnet_url) = config.mainnet_url {
+            eprintln!("[UTxO RPC] Attempting to create mainnet client for URL: {}", mainnet_url);
+            
             let builder = ClientBuilder::new()
                 .uri(&mainnet_url)
                 .map_err(|e| format!("Invalid mainnet URL: {}", e))?;
 
             let builder = if let Some(api_key) = &config.api_key {
+                eprintln!("[UTxO RPC] Adding API key to mainnet client");
                 builder
                     .metadata("dmtr-api-key", api_key)
                     .map_err(|e| format!("Failed to set API key: {}", e))?
             } else {
+                eprintln!("[UTxO RPC] No API key provided for mainnet client");
                 builder
             };
 
             // build() returns a Future that needs to be awaited
+            eprintln!("[UTxO RPC] Building mainnet client...");
             mainnet_client = Some(builder.build::<CardanoQueryClient>().await);
-            eprintln!("[UTxO RPC] Created mainnet client for: {}", mainnet_url);
+            eprintln!("[UTxO RPC] Successfully created mainnet client for: {}", mainnet_url);
         }
 
         // Create testnet client if URL is provided
         if let Some(testnet_url) = config.testnet_url {
+            eprintln!("[UTxO RPC] Attempting to create testnet client for URL: {}", testnet_url);
+            
             let builder = ClientBuilder::new()
                 .uri(&testnet_url)
                 .map_err(|e| format!("Invalid testnet URL: {}", e))?;
 
             let builder = if let Some(api_key) = &config.api_key {
+                eprintln!("[UTxO RPC] Adding API key to testnet client");
                 builder
                     .metadata("dmtr-api-key", api_key)
                     .map_err(|e| format!("Failed to set API key: {}", e))?
             } else {
+                eprintln!("[UTxO RPC] No API key provided for testnet client");
                 builder
             };
 
             // build() returns a Future that needs to be awaited
+            eprintln!("[UTxO RPC] Building testnet client...");
             testnet_client = Some(builder.build::<CardanoQueryClient>().await);
-            eprintln!("[UTxO RPC] Created testnet client for: {}", testnet_url);
+            eprintln!("[UTxO RPC] Successfully created testnet client for: {}", testnet_url);
         }
 
         Ok(Self {
@@ -80,26 +90,30 @@ impl UtxoRpcClient {
         };
 
         eprintln!("[UTxO RPC] Fetching UTxOs for stake address: {}", hex_stake_address);
-
-        // Convert hex stake address to bytes
-        let stake_address_bytes = hex::decode(hex_stake_address)
-            .map_err(|e| format!("Invalid hex stake address: {}", e))?;
-
         // Create address pattern for stake address matching
         let pattern = spec::cardano::TxOutputPattern {
             address: Some(spec::cardano::AddressPattern {
-                exact_address: stake_address_bytes.into(),
+                exact_address: Default::default(),
                 payment_part: Default::default(),
-                delegation_part: Default::default(),
+                delegation_part: hex::decode(hex_stake_address)
+                    .unwrap()
+                    .into(),
             }),
             asset: None,
         };
 
         // match_utxos returns Result<UtxoPage<C>, Error>
-        let utxo_page = client
-            .match_utxos(pattern, None, limit.unwrap_or(100))
-            .await
-            .map_err(|e| format!("Failed to fetch UTxOs: {:?}", e))?;
+        eprintln!("[UTxO RPC] Sending match_utxos request...");
+        let utxo_page = match client.match_utxos(pattern, None, limit.unwrap_or(100)).await {
+            Ok(page) => {
+                eprintln!("[UTxO RPC] Successfully received response");
+                page
+            },
+            Err(e) => {
+                eprintln!("[UTxO RPC] Error details: {:?}", e);
+                return Err(format!("Failed to fetch UTxOs: {:?}", e));
+            }
+        };
 
         eprintln!("[UTxO RPC] Found {} UTxOs", utxo_page.items.len());
         
@@ -135,8 +149,6 @@ impl UtxoRpcClient {
                  ),
                 datum_option: None,
                 script_ref: None,
-                //amount: pallas_primitives::alonzo::Value::Multiasset(tx_output.coin, tx_output.assets),
-                //datum_hash: None, // Handle datum hash if needed
             };
             
             let transaction_unspent_output = (tx_in, tx_out);
@@ -150,3 +162,33 @@ impl UtxoRpcClient {
         Ok(cip30_utxos)
     }
 }
+
+#[tokio::test]
+    async fn test_match_utxos() {
+        // Test using the same client initialization as production
+        let config = crate::config::UtxoRpcConfig {
+            mainnet_url: None,
+            testnet_url: Some("http://localhost:50051".to_string()),
+            api_key: Some("dmtr_utxorpc1wgnnj0qcfj32zxsz2uc8d4g7uclm2s2w".to_string()),
+        };
+        
+        let mut utxo_client = UtxoRpcClient::new(config).await.unwrap();
+        
+        let hex_stake_address = "e027e96b274539896e4f8b79d2c0f8a76f3c247a61da4fd67fab52ab55";
+        let result = utxo_client.fetch_utxos_by_stake_address(
+            hex_stake_address,
+            pallas_addresses::Network::Testnet,
+            Some(100)
+        ).await;
+        
+        match result {
+            Ok(utxos) => {
+                dbg!(&utxos);
+                assert!(true); // Test passes if we get any response
+            },
+            Err(e) => {
+                eprintln!("Test failed with error: {}", e);
+                panic!("UTxO RPC test failed: {}", e);
+            }
+        }
+    }

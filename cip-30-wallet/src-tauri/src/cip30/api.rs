@@ -179,7 +179,11 @@ async fn get_utxos(params: Value, app_state: Option<&AppState>) -> Result<Value,
     }
     
     let wallet_id = &wallets[0].wallet_id;
-    let stake_addresses = crate::wallet::get_reward_addresses_from_wallet(&store, wallet_id, 0)?;
+
+    let runtime_network = load_runtime_network_direct();
+    let network = runtime_network.unwrap_or_else(|| app_state.config.get_network());
+    
+    let stake_addresses = crate::wallet::get_reward_addresses_from_wallet(&store, wallet_id, 0, network)?;
     drop(store); // Release the lock
     
     if stake_addresses.is_empty() {
@@ -194,16 +198,23 @@ async fn get_utxos(params: Value, app_state: Option<&AppState>) -> Result<Value,
     let network = runtime_network.unwrap_or_else(|| app_state.config.get_network());
     
     // Try to use UTxO RPC client if available
-    let mut utxorpc_client_guard = app_state.utxorpc_client.lock().unwrap();
-    if let Some(ref mut client) = *utxorpc_client_guard {
-        eprintln!("[API] Using UTxO RPC to fetch UTxOs");
-        match client.fetch_utxos_by_stake_address(stake_address, network, Some(100)).await {
-            Ok(utxos) => {
-                eprintln!("[API] Successfully fetched UTxOs via UTxO RPC");
-                return Ok(utxos);
+    if let Some(ref utxorpc_config) = app_state.config.utxorpc {
+        eprintln!("[API] Creating fresh UTxO RPC client for request");
+        match crate::utxorpc::UtxoRpcClient::new(utxorpc_config.clone()).await {
+            Ok(mut fresh_client) => {
+                eprintln!("[API] Fresh UTxO RPC client created, fetching UTxOs");
+                match fresh_client.fetch_utxos_by_stake_address(stake_address, network, Some(100)).await {
+                    Ok(utxos) => {
+                        eprintln!("[API] Successfully fetched UTxOs via fresh UTxO RPC client");
+                        return Ok(utxos);
+                    },
+                    Err(e) => {
+                        eprintln!("[API] Fresh UTxO RPC failed: {}, falling back to mock data", e);
+                    }
+                }
             },
             Err(e) => {
-                eprintln!("[API] UTxO RPC failed: {}, falling back to mock data", e);
+                eprintln!("[API] Failed to create fresh UTxO RPC client: {}", e);
             }
         }
     } else {
@@ -328,8 +339,12 @@ fn get_reward_addresses(app_state: Option<&AppState>) -> Result<Value, String> {
     }
     
     let wallet_id = &wallets[0].wallet_id;
+
+    let runtime_network = load_runtime_network_direct();
+    let network = runtime_network.unwrap_or_else(|| app_state.config.get_network());
     
-    let addresses: Vec<String> = get_reward_addresses_from_wallet(&store, wallet_id, 0)?;
+    
+    let addresses: Vec<String> = get_reward_addresses_from_wallet(&store, wallet_id, 0, network)?;
     
     Ok(json!(addresses))
 }

@@ -415,17 +415,25 @@ pub fn create_app_state() -> Result<AppState, String> {
     
     // Initialize UTxO RPC client if configured
     let utxorpc_client = if let Some(utxorpc_config) = &config.utxorpc {
+        eprintln!("[INIT] UTxO RPC config found, initializing client...");
+        eprintln!("[INIT] Mainnet URL: {:?}", utxorpc_config.mainnet_url);
+        eprintln!("[INIT] Testnet URL: {:?}", utxorpc_config.testnet_url);
+        
         // Use blocking runtime to initialize the async client
         let rt = tokio::runtime::Runtime::new().unwrap();
         match rt.block_on(UtxoRpcClient::new(utxorpc_config.clone())) {
-            Ok(client) => Some(client),
+            Ok(client) => {
+                eprintln!("[INIT] UTxO RPC client successfully initialized");
+                Some(client)
+            },
             Err(e) => {
-                eprintln!("Failed to initialize UTxO RPC client: {}", e);
-                eprintln!("UTxO RPC functionality will be disabled");
+                eprintln!("[INIT] Failed to initialize UTxO RPC client: {}", e);
+                eprintln!("[INIT] UTxO RPC functionality will be disabled");
                 None
             }
         }
     } else {
+        eprintln!("[INIT] No UTxO RPC config found in configuration");
         None
     };
     

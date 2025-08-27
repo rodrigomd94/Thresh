@@ -149,13 +149,13 @@ mod tests {
         let master = Bip32PrivateKey::from_bip39_seed(&seed).unwrap();
         
         // Cardano derivation: m/1852'/1815'/0'
-        let purpose = master.derive_hardened(1852).unwrap();
-        let coin_type = purpose.derive_hardened(1815).unwrap();
-        let account = coin_type.derive_hardened(0).unwrap();
+        let purpose = master.derive(1852 | 0x80000000);  // Hardened
+        let coin_type = purpose.derive(1815 | 0x80000000);  // Hardened
+        let account = coin_type.derive(0 | 0x80000000);  // Hardened
         
         // Derive first external address: m/1852'/1815'/0'/0/0
-        let external_chain = account.derive_soft(0).unwrap();
-        let address_key = external_chain.derive_soft(0).unwrap();
+        let external_chain = account.derive(0);  // Non-hardened
+        let address_key = external_chain.derive(0);  // Non-hardened
         
         assert_eq!(address_key.to_bytes().len(), 64);
     }
