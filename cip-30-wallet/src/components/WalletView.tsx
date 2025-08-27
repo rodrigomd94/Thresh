@@ -17,9 +17,10 @@ interface WalletViewProps {
   walletId: string;
   walletName: string;
   onBack: () => void;
+  isNewWallet?: boolean;
 }
 
-export function WalletView({ walletId, walletName, onBack }: WalletViewProps) {
+export function WalletView({ walletId, walletName, onBack, isNewWallet = false }: WalletViewProps) {
   const [addresses, setAddresses] = useState<AddressInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -75,7 +76,7 @@ export function WalletView({ walletId, walletName, onBack }: WalletViewProps) {
             <RefreshCw className="h-12 w-12 animate-spin text-primary mb-4" />
             <h3 className="text-lg font-medium mb-2">Loading Wallet...</h3>
             <p className="text-sm text-center text-muted-foreground">
-              Generating addresses from your wallet
+              {isNewWallet ? 'Generating addresses from your recovery phrase' : 'Generating addresses from your wallet'}
             </p>
           </CardContent>
         </Card>
@@ -97,7 +98,7 @@ export function WalletView({ walletId, walletName, onBack }: WalletViewProps) {
                 {walletName}
               </CardTitle>
               <CardDescription>
-                Your Cardano wallet addresses (public key derivation only)
+                {isNewWallet ? 'Your Cardano wallet is ready! Here are your first addresses.' : 'Your Cardano wallet addresses (public key derivation only)'}
               </CardDescription>
             </div>
           </div>
@@ -113,8 +114,17 @@ export function WalletView({ walletId, walletName, onBack }: WalletViewProps) {
           <Alert>
             <Wallet className="h-4 w-4" />
             <AlertDescription>
-              <strong>Secure Address Display!</strong> These addresses are derived using only your public key. 
-              No private key is needed to view your receiving addresses.
+              {isNewWallet ? (
+                <>
+                  <strong>Wallet Created Successfully!</strong> Your addresses are derived from your recovery phrase. 
+                  You can share these addresses to receive ADA.
+                </>
+              ) : (
+                <>
+                  <strong>Secure Address Display!</strong> These addresses are derived using only your public key. 
+                  No private key is needed to view your receiving addresses.
+                </>
+              )}
             </AlertDescription>
           </Alert>
 
@@ -194,8 +204,7 @@ export function WalletView({ walletId, walletName, onBack }: WalletViewProps) {
 
           <Alert>
             <AlertDescription className="text-xs">
-              <strong>Security Note:</strong> This view uses only public key derivation. 
-              Your private keys remain encrypted and are only needed for transaction signing.
+              <strong>Security Note:</strong> {isNewWallet ? 'These addresses are generated from your recovery phrase. Keep your recovery phrase secure - anyone with access to it can control your wallet.' : 'This view uses only public key derivation. Your private keys remain encrypted and are only needed for transaction signing.'}
             </AlertDescription>
           </Alert>
         </CardContent>

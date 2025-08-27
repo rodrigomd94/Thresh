@@ -47,6 +47,10 @@ pub fn run() {
 pub fn run_native_messaging() {
     eprintln!("Starting native messaging mode...");
     
+    // Initialize app state for native messaging
+    let app_state = create_app_state()
+        .expect("Failed to initialize app state for native messaging");
+    
     let rx = start_native_messaging();
     
     // Main message loop
@@ -67,7 +71,7 @@ pub fn run_native_messaging() {
                         
                         // Handle CIP-30 request
                         let rt = tokio::runtime::Runtime::new().unwrap();
-                        let result = rt.block_on(handle_cip30_request(&method, params.clone()));
+                        let result = rt.block_on(handle_cip30_request(&method, params.clone(), Some(&app_state)));
                         
                         match result {
                             Ok(data) => {

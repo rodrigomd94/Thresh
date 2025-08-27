@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ArrowLeft, RefreshCw, Eye, EyeOff, Check, AlertTriangle } from 'lucide-react';
 import { MnemonicConfirmation } from './MnemonicConfirmation';
-import { WalletDashboard } from './WalletDashboard';
+import { WalletView } from './WalletView';
 
 interface MnemonicGenerationProps {
   onBack: () => void;
@@ -106,10 +106,11 @@ export function MnemonicGeneration({ onBack, onWalletCreated }: MnemonicGenerati
 
   if (step === 'dashboard' && walletId) {
     return (
-      <WalletDashboard
+      <WalletView
         walletId={walletId}
         walletName={walletName}
         onBack={onWalletCreated}
+        isNewWallet={true}
       />
     );
   }

@@ -9,19 +9,19 @@ pub enum NativeMessage {
     #[serde(rename = "ping")]
     Ping { 
         #[serde(rename = "requestId")]
-        request_id: Option<f64> 
+        request_id: Option<serde_json::Value> 
     },
     
     #[serde(rename = "pong")]
     Pong { 
         #[serde(rename = "requestId")]
-        request_id: Option<f64> 
+        request_id: Option<serde_json::Value> 
     },
     
     #[serde(rename = "cip30")]
     Cip30Request {
         #[serde(rename = "requestId")]
-        request_id: Option<f64>,
+        request_id: Option<serde_json::Value>,
         method: String,
         params: serde_json::Value,
     },
@@ -29,7 +29,7 @@ pub enum NativeMessage {
     #[serde(rename = "response")]
     Response {
         #[serde(rename = "requestId")]
-        request_id: Option<f64>,
+        request_id: Option<serde_json::Value>,
         data: serde_json::Value,
         error: Option<String>,
     },

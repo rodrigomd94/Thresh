@@ -1,7 +1,11 @@
 use serde_json::{json, Value};
 use super::types::*;
+use crate::commands::{AppState, AddressInfo};
+use crate::wallet::derive_addresses_from_wallet;
+use std::sync::Mutex;
+use tauri::State;
 
-pub async fn handle_cip30_request(method: &str, params: Value) -> Result<Value, String> {
+pub async fn handle_cip30_request(method: &str, params: Value, app_state: Option<&AppState>) -> Result<Value, String> {
     eprintln!("[API] Handling CIP-30 method: {}", method);
     
     let result = match method {
@@ -23,11 +27,11 @@ pub async fn handle_cip30_request(method: &str, params: Value) -> Result<Value, 
         },
         "getUsedAddresses" => {
             eprintln!("[API] getUsedAddresses called with params: {}", serde_json::to_string(&params).unwrap_or_else(|_| "Invalid JSON".to_string()));
-            get_used_addresses(params)
+            get_used_addresses(params).await
         },
         "getUnusedAddresses" => {
             eprintln!("[API] getUnusedAddresses called");
-            get_unused_addresses()
+            get_unused_addresses(app_state).await
         },
         "getChangeAddress" => {
             eprintln!("[API] getChangeAddress called");
@@ -102,19 +106,64 @@ fn get_balance() -> Result<Value, String> {
     Ok(json!("1a002dc6c0")) // 3000000 lovelace
 }
 
-fn get_used_addresses(params: Value) -> Result<Value, String> {
-    // Mock used addresses (as CBOR hex)
-    Ok(json!([
-        format!("{}{}", "0061", "2fxv2umyhttkxyxp8x0dlpdt3k6cwng5pxj3jhsydzer3n0d3vllmyqwsx5wktcd8cc3sq835lu7drv2xwl2wywfgse35a3x"),
-        format!("{}{}", "0061", "3fxv2umyhttkxyxp8x0dlpdt3k6cwng5pxj3jhsydzer3n0d3vllmyqwsx5wktcd8cc3sq835lu7drv2xwl2wywfgse35a3x")
-    ]))
+async fn get_used_addresses(app_state: Option<&AppState>) -> Result<Value, String> {
+    let app_state = app_state.ok_or("App state not available")?;
+    
+    // For now, get the first wallet (in a real implementation, this should be the connected wallet)
+    let store = app_state.wallet_store.lock().unwrap();
+    let wallets = store.list_wallets()
+        .map_err(|e| format!("Failed to list wallets: {}", e))?;
+    
+    if wallets.is_empty() {
+        return Err("No wallets available".to_string());
+    }
+    
+    let wallet_id = &wallets[0].wallet_id;
+    
+    // Use the shared address derivation function
+    let addresses = derive_addresses_from_wallet(&store, wallet_id, 0, 5)?;
+    
+    // Convert addresses to hex format for CIP-30
+    let hex_addresses: Vec<String> = addresses
+        .iter()
+        .map(|addr_info| {
+            let addr = pallas_addresses::Address::from_bech32(&addr_info.address)
+                .expect("Invalid address format");
+            addr.to_hex()
+        })
+        .collect();
+    
+    Ok(json!(hex_addresses))
 }
 
-fn get_unused_addresses() -> Result<Value, String> {
-    // Mock unused addresses
-    Ok(json!([
-        format!("{}{}", "0061", "4fxv2umyhttkxyxp8x0dlpdt3k6cwng5pxj3jhsydzer3n0d3vllmyqwsx5wktcd8cc3sq835lu7drv2xwl2wywfgse35a3x")
-    ]))
+async fn get_unused_addresses(app_state: Option<&AppState>) -> Result<Value, String> {
+    let app_state = app_state.ok_or("App state not available")?;
+    
+    // For now, get the first wallet (in a real implementation, this should be the connected wallet)
+    let store = app_state.wallet_store.lock().unwrap();
+    let wallets = store.list_wallets()
+        .map_err(|e| format!("Failed to list wallets: {}", e))?;
+    
+    if wallets.is_empty() {
+        return Err("No wallets available".to_string());
+    }
+    
+    let wallet_id = &wallets[0].wallet_id;
+    
+    // Use the shared address derivation function
+    let addresses = derive_addresses_from_wallet(&store, wallet_id, 0, 5)?;
+    
+    // Convert addresses to hex format for CIP-30
+    let hex_addresses: Vec<String> = addresses
+        .iter()
+        .map(|addr_info| {
+            let addr = pallas_addresses::Address::from_bech32(&addr_info.address)
+                .expect("Invalid address format");
+            addr.to_hex()
+        })
+        .collect();
+    
+    Ok(json!(hex_addresses))
 }
 
 fn get_change_address() -> Result<Value, String> {
