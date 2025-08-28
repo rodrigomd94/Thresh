@@ -27,6 +27,13 @@ pub fn run() {
     
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            // This callback is called when a second instance is launched
+            eprintln!("Second instance detected, showing existing window");
+            
+            // Show and focus the existing window
+            show_main_window(&app.app_handle());
+        }))
         .manage(app_state)
         .setup(setup_system_tray)
         .invoke_handler(tauri::generate_handler![
@@ -70,6 +77,13 @@ pub fn run_native_messaging() {
     // so we have access to the app handle for UI operations
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            // This callback is called when a second instance is launched
+            eprintln!("Second instance detected via native messaging, showing existing window");
+            
+            // Show and focus the existing window
+            show_main_window(&app.app_handle());
+        }))
         .manage(app_state)
         .setup(|app| {
             setup_system_tray(app)?;
@@ -210,12 +224,30 @@ async fn start_native_messaging_handler(app_handle: AppHandle) {
                         eprintln!("[CIP30] RequestId: {:?}", request_id);
                         eprintln!("[CIP30] Params: {}", serde_json::to_string_pretty(&params).unwrap_or_else(|_| "Invalid JSON".to_string()));
                         
+                        // Log the CIP-30 request
+                        let log_msg = format!("{}: Processing CIP-30 method: {} with params: {}\n", 
+                            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
+                            method,
+                            serde_json::to_string(&params).unwrap_or_else(|_| "Invalid JSON".to_string())
+                        );
+                        let _ = std::fs::OpenOptions::new().create(true).append(true).open("/tmp/thresh.log")
+                            .and_then(|mut f| std::io::Write::write_all(&mut f, log_msg.as_bytes()));
+                        
                         // Now we have app_handle available for all requests including signTx
                         let result = handle_cip30_request(&method, params.clone(), Some(app_state.inner()), Some(app_handle.clone())).await;
                         
                         match result {
                             Ok(data) => {
                                 eprintln!("[CIP30] Response data: {}", serde_json::to_string_pretty(&data).unwrap_or_else(|_| "Invalid JSON".to_string()));
+                                
+                                // Log success response
+                                let log_msg = format!("{}: CIP-30 method {} succeeded\n", 
+                                    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
+                                    method
+                                );
+                                let _ = std::fs::OpenOptions::new().create(true).append(true).open("/tmp/thresh.log")
+                                    .and_then(|mut f| std::io::Write::write_all(&mut f, log_msg.as_bytes()));
+                                
                                 NativeMessage::Response {
                                     request_id,
                                     data,
@@ -224,6 +256,16 @@ async fn start_native_messaging_handler(app_handle: AppHandle) {
                             },
                             Err(error) => {
                                 eprintln!("[CIP30] Error: {}", error);
+                                
+                                // Log error response  
+                                let log_msg = format!("{}: CIP-30 method {} failed: {}\n", 
+                                    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
+                                    method,
+                                    error
+                                );
+                                let _ = std::fs::OpenOptions::new().create(true).append(true).open("/tmp/thresh.log")
+                                    .and_then(|mut f| std::io::Write::write_all(&mut f, log_msg.as_bytes()));
+                                
                                 NativeMessage::Response {
                                     request_id,
                                     data: serde_json::Value::Null,

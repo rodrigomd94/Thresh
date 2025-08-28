@@ -112,15 +112,22 @@ dolos daemon
 
 ### Step 5: Run the Desktop Wallet
 
+The wallet runs as a system tray application with a unified architecture:
+
 ```bash
-# Run the desktop wallet in development mode
+# Launch the wallet (after building with dev.sh rebuild)
+thresh
+
+# Or run in development mode
 cd cip-30-wallet
 npm run tauri dev
-
-# Or build and run the release version
-npm run tauri build
-./src-tauri/target/release/cip-30-wallet
 ```
+
+The app will:
+- ✅ Start in the system tray (look for the icon in your system tray)
+- ✅ Handle both manual UI access and browser extension communication
+- ✅ Prevent multiple instances (single-instance architecture)
+- ✅ Log all activity to `/tmp/thresh.log`
 
 ## Development
 
@@ -160,8 +167,14 @@ tauri-wallet-extension/
 # Rebuild and reinstall (recommended for testing)
 ./dev.sh rebuild YOUR_EXTENSION_ID
 
-# Monitor logs
+# Monitor logs (real-time)
 ./dev.sh logs
+
+# View recent log entries
+./logs.sh show
+
+# Clear logs
+./logs.sh clear
 
 # Show development status
 ./dev.sh status
@@ -275,6 +288,23 @@ Thresh + Dolos makes it easy to run isolated development environments:
 3. Configure Thresh to connect to your local Dolos instance
 4. Deploy and test your dApps in a controlled environment
 
+## Architecture
+
+### System Tray Application
+
+Thresh uses a **unified system tray architecture**:
+
+- **Single Process**: One binary handles both UI and browser extension communication
+- **System Tray**: App runs in background, accessible via tray icon  
+- **Single Instance**: Only one instance runs at a time (prevents multiple tray icons)
+- **Always Available**: Responds to both manual launches and browser extension requests
+
+### Communication Flow
+
+1. **Browser Extension** → Native Messaging → **Thresh Binary**
+2. **User Clicks Tray** → **Thresh UI** (same process)  
+3. **Transaction Signing** → Shows password dialog in existing window
+
 ## Troubleshooting
 
 ### Extension Connection Issues
@@ -290,8 +320,14 @@ cat ~/.config/google-chrome/NativeMessagingHosts/com.cardano.thresh.json
 
 2. **Check Logs**:
 ```bash
-# Monitor native messaging logs
-./dev.sh logs
+# Monitor logs in real-time
+./logs.sh
+
+# View recent log entries
+./logs.sh show
+
+# Clear logs
+./logs.sh clear
 
 # View Chrome console for extension errors
 # Go to chrome://extensions/ → Details → Background page

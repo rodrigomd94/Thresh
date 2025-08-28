@@ -35,11 +35,11 @@ print_usage() {
 build_tauri() {
     local mode="$1"
     echo -e "${BLUE}Building Tauri app in $mode mode...${NC}"
-    cd "$TAURI_DIR"
+    cd "$SCRIPT_DIR/cip-30-wallet"
     if [ "$mode" = "release" ]; then
-        cargo build --release
+        npm run tauri build
     else
-        cargo build
+        npm run tauri dev --exit-on-close
     fi
     cd "$SCRIPT_DIR"
 }

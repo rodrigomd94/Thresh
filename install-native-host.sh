@@ -24,10 +24,8 @@ fi
 
 EXTENSION_ID=$1
 
-# Build the Tauri app
-echo "Building Tauri app..."
-cd "$SCRIPT_DIR/cip-30-wallet/src-tauri"
-cargo build --release -q
+# Note: Build should be done before calling this script (e.g., via dev.sh rebuild)
+echo "Installing Tauri app binary..."
 
 # Detect OS
 OS=$(uname -s)
@@ -49,6 +47,14 @@ case "$OS" in
         exit 1
         ;;
 esac
+
+# Check if binary exists
+if [ ! -f "$BINARY_PATH" ]; then
+    echo -e "${RED}Error: Binary not found at $BINARY_PATH${NC}"
+    echo -e "${YELLOW}Please build the app first with: ./dev.sh build-release${NC}"
+    echo -e "${YELLOW}Or use: ./dev.sh rebuild <extension-id> to build and install in one step${NC}"
+    exit 1
+fi
 
 # Create native messaging hosts directory if it doesn't exist
 mkdir -p "$TARGET_DIR"

@@ -36,9 +36,9 @@ export function MnemonicConfirmation({ originalMnemonic, onBack, onConfirmed }: 
       }
     }
     
-    randomIndices.sort((a, b) => a - b);
+    randomIndices.sort((a:number, b:number) => a - b);
     
-    const words = randomIndices.map(index => ({
+    const words = randomIndices.map((index:number) => ({
       index,
       word: originalMnemonic[index],
       userInput: '',
@@ -79,9 +79,9 @@ export function MnemonicConfirmation({ originalMnemonic, onBack, onConfirmed }: 
       }
     }
     
-    randomIndices.sort((a, b) => a - b);
+    randomIndices.sort((a:number, b: number) => a - b);
     
-    const words = randomIndices.map(index => ({
+    const words = randomIndices.map((index: number) => ({
       index,
       word: originalMnemonic[index],
       userInput: '',
