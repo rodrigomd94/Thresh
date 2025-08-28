@@ -61,20 +61,34 @@ Private keys and mnemonics are never stored in plain text and are encrypted usin
 - Node.js and npm
 - Git
 
-### Step 1: Clone and Build
+### Step 1: Clone the Repository
 
 ```bash
 # Clone the repository
 git clone https://github.com/your-repo/tauri-wallet-extension.git
 cd tauri-wallet-extension
 
-# Build the desktop wallet
+# Install dependencies
 cd cip-30-wallet
 npm install
-npm run build
+cd ..
 ```
 
-### Step 2: Install Dolos
+### Step 2: Load Chrome Extension
+
+1. Open Chrome and navigate to `chrome://extensions/`
+2. Enable "Developer mode" (toggle in top right)
+3. Click "Load unpacked" and select the `chrome-extension` directory
+4. Note the extension ID shown on the extension card
+
+### Step 3: Build and Install Native Messaging Host
+
+```bash
+# Build the Tauri app and install native messaging host
+./dev.sh rebuild YOUR_EXTENSION_ID_HERE
+```
+
+### Step 4: Install and Run Dolos
 
 Install tx3up (Tx3 ecosystem manager):
 ```bash
@@ -96,34 +110,15 @@ dolos daemon
 # Dolos will sync with the configured network (mainnet/testnet/devnet)
 ```
 
-### Step 3: Load Chrome Extension
-
-1. Open Chrome and navigate to `chrome://extensions/`
-2. Enable "Developer mode" (toggle in top right)
-3. Click "Load unpacked" and select the `chrome-extension` directory
-4. Note the extension ID shown on the extension card
-
-### Step 4: Install Native Messaging Host
-
-```bash
-# Return to project root
-cd ..
-
-# Run the installation script with your extension ID
-./dev.sh install YOUR_EXTENSION_ID_HERE
-
-# Or rebuild everything (build + install)
-./dev.sh rebuild YOUR_EXTENSION_ID_HERE
-```
-
 ### Step 5: Run the Desktop Wallet
 
 ```bash
-# Run the desktop wallet
+# Run the desktop wallet in development mode
 cd cip-30-wallet
 npm run tauri dev
 
-# Or run the built version
+# Or build and run the release version
+npm run tauri build
 ./src-tauri/target/release/cip-30-wallet
 ```
 
@@ -223,7 +218,7 @@ cargo watch -x check -x test -x run
 
 ### Future Plans: FROST Threshold Signatures
 
-Thresh is designed to support FROST (Flexible Round-Optimized Schnorr Threshold) signatures, enabling:
+One of the key motivations for creating Thresh is to eventually implement FROST (Flexible Round-Optimized Schnorr Threshold) signatures, which will enable:
 
 **Distributed Key Generation & Management**
 - Multiple parties can collectively control a wallet
