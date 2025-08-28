@@ -77,12 +77,12 @@ This script will:
 
 ### For dApp Developers
 
-The wallet is available at `window.cardano.tauri_wallet` and implements the full CIP-30 API:
+The wallet is available at `window.cardano.thresh` and implements the full CIP-30 API:
 
 ```javascript
 // Check if wallet is available
-if (window.cardano && window.cardano.tauri_wallet) {
-  const wallet = window.cardano.tauri_wallet;
+if (window.cardano && window.cardano.thresh) {
+  const wallet = window.cardano.thresh;
   
   // Enable wallet (request access)
   const api = await wallet.enable();
@@ -147,7 +147,7 @@ Enable debug logging by viewing background script console:
 
 1. Check that the native messaging host is installed correctly:
    ```bash
-   ls ~/.config/google-chrome/NativeMessagingHosts/com.cardano.tauri_wallet.json
+   ls ~/.config/google-chrome/NativeMessagingHosts/com.cardano.thresh.json
    ```
 
 2. Verify the extension ID in the manifest matches your extension

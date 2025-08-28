@@ -75,10 +75,10 @@ EOF
 chmod +x "$WRAPPER_PATH"
 
 # Create native messaging manifest with correct extension ID
-MANIFEST_PATH="$TARGET_DIR/com.cardano.tauri_wallet.json"
+MANIFEST_PATH="$TARGET_DIR/com.cardano.thresh.json"
 cat > "$MANIFEST_PATH" << EOF
 {
-  "name": "com.cardano.tauri_wallet",
+  "name": "com.cardano.thresh",
   "description": "Tauri-based Cardano Wallet Native Messaging Host",
   "path": "$WRAPPER_PATH",
   "type": "stdio",

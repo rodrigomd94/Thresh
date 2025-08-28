@@ -65,9 +65,9 @@ show_status() {
     fi
     
     # Check native messaging manifest
-    if [ -f "$HOME/.config/google-chrome/NativeMessagingHosts/com.cardano.tauri_wallet.json" ]; then
+    if [ -f "$HOME/.config/google-chrome/NativeMessagingHosts/com.cardano.thresh.json" ]; then
         echo -e "${GREEN}✓${NC} Native messaging host installed"
-        echo "    Extension ID: $(grep -o 'chrome-extension://[^/]*' ~/.config/google-chrome/NativeMessagingHosts/com.cardano.tauri_wallet.json | sed 's/chrome-extension:\/\///')"
+        echo "    Extension ID: $(grep -o 'chrome-extension://[^/]*' ~/.config/google-chrome/NativeMessagingHosts/com.cardano.thresh.json | sed 's/chrome-extension:\/\///')"
     else
         echo -e "${RED}✗${NC} Native messaging host not installed"
     fi
