@@ -4,14 +4,7 @@
 use std::env;
 
 fn main() {
-    // Check if running as native messaging host
-    let args: Vec<String> = env::args().collect();
-    
-    if args.len() > 1 && args[1] == "--native-messaging" {
-        // Run in native messaging mode
-        cip_30_wallet_lib::run_native_messaging();
-    } else {
-        // Run normal Tauri app
-        cip_30_wallet_lib::run()
-    }
+    // Always run the unified app with both system tray and native messaging
+    // The app will automatically handle both manual launches and browser communication
+    thresh_lib::run_native_messaging();
 }

@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# Tauri Wallet Logging Script
+# Thresh Wallet Logging Script
 
-LOG_FILE="/tmp/tauri-wallet-native-messaging.log"
+LOG_FILE="/tmp/thresh.log"
 
 case "${1:-tail}" in
   "tail"|"follow"|"f")
@@ -32,7 +32,7 @@ case "${1:-tail}" in
     ;;
     
   "help"|"-h"|"--help")
-    echo "Tauri Wallet Logging Script"
+    echo "Thresh Wallet Logging Script"
     echo ""
     echo "Usage: ./logs.sh [command]"
     echo ""

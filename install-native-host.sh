@@ -34,11 +34,11 @@ OS=$(uname -s)
 case "$OS" in
     Linux*)
         TARGET_DIR="$HOME/.config/google-chrome/NativeMessagingHosts"
-        BINARY_PATH="$SCRIPT_DIR/cip-30-wallet/src-tauri/target/release/cip-30-wallet"
+        BINARY_PATH="$SCRIPT_DIR/cip-30-wallet/src-tauri/target/release/thresh"
         ;;
     Darwin*)
         TARGET_DIR="$HOME/Library/Application Support/Google/Chrome/NativeMessagingHosts"
-        BINARY_PATH="$SCRIPT_DIR/cip-30-wallet/src-tauri/target/release/cip-30-wallet"
+        BINARY_PATH="$SCRIPT_DIR/cip-30-wallet/src-tauri/target/release/thresh"
         ;;
     MINGW*|CYGWIN*|MSYS*)
         echo -e "${RED}Windows installation requires manual steps. Please see README.md${NC}"
@@ -58,29 +58,18 @@ USER_BIN_DIR="$HOME/.local/bin"
 mkdir -p "$USER_BIN_DIR"
 
 # Copy binary to user-local location (no sudo needed)
-INSTALL_PATH="$USER_BIN_DIR/cip-30-wallet"
+INSTALL_PATH="$USER_BIN_DIR/thresh"
 echo "Installing binary to $INSTALL_PATH..."
 cp "$BINARY_PATH" "$INSTALL_PATH"
 chmod +x "$INSTALL_PATH"
 
-# Create wrapper script that adds --native-messaging flag and logging
-WRAPPER_PATH="$USER_BIN_DIR/cip-30-wallet-native"
-cat > "$WRAPPER_PATH" << EOF
-#!/bin/bash
-LOG_FILE="/tmp/tauri-wallet-native-messaging.log"
-echo "\$(date): Native messaging host started" >> "\$LOG_FILE"
-echo "\$(date): Arguments: \$@" >> "\$LOG_FILE"
-exec "$INSTALL_PATH" --native-messaging 2>> "\$LOG_FILE"
-EOF
-chmod +x "$WRAPPER_PATH"
-
-# Create native messaging manifest with correct extension ID
+# Create native messaging manifest pointing directly to the unified binary
 MANIFEST_PATH="$TARGET_DIR/com.cardano.thresh.json"
 cat > "$MANIFEST_PATH" << EOF
 {
   "name": "com.cardano.thresh",
-  "description": "Tauri-based Cardano Wallet Native Messaging Host",
-  "path": "$WRAPPER_PATH",
+  "description": "Thresh - Cardano Wallet Native Messaging Host",
+  "path": "$INSTALL_PATH",
   "type": "stdio",
   "allowed_origins": [
     "chrome-extension://$EXTENSION_ID/"

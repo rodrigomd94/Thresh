@@ -11,6 +11,7 @@ use native_messaging::{NativeMessage, start_native_messaging, send_message};
 use cip30::handle_cip30_request;
 use commands::*;
 use tauri::{menu::{Menu, MenuItem}, tray::TrayIconBuilder, Manager, AppHandle};
+use std::io::Write;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
@@ -180,6 +181,12 @@ pub fn hide_main_window(app: &AppHandle) {
 async fn start_native_messaging_handler(app_handle: AppHandle) {
     eprintln!("Starting native messaging handler with UI access...");
     
+    // Set up basic logging
+    let log_msg = format!("Thresh native messaging started at {}\n", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
+    if let Err(e) = std::fs::write("/tmp/thresh.log", log_msg) {
+        eprintln!("Failed to write to log file: {}", e);
+    }
+    
     let app_state = app_handle.state::<AppState>();
     let rx = start_native_messaging();
     
@@ -188,6 +195,10 @@ async fn start_native_messaging_handler(app_handle: AppHandle) {
         match rx.recv() {
             Ok(message) => {
                 eprintln!("[RECV] Raw message: {:?}", message);
+                
+                // Log to file
+                let log_msg = format!("{}: Received message: {:?}\n", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(), message);
+                let _ = std::fs::OpenOptions::new().create(true).append(true).open("/tmp/thresh.log").and_then(|mut f| std::io::Write::write_all(&mut f, log_msg.as_bytes()));
                 
                 let response = match message {
                     NativeMessage::Ping { request_id } => {

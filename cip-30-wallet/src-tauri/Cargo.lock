@@ -656,36 +656,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cip-30-wallet"
-version = "0.1.0"
-dependencies = [
- "bech32 0.11.0",
- "bip39",
- "cardano-multiplatform-lib",
- "cryptoxide 0.5.1",
- "dirs 5.0.1",
- "ed25519-bip32",
- "ed25519-dalek",
- "hex",
- "lazy_static",
- "pallas-addresses",
- "pallas-codec",
- "pallas-crypto",
- "pallas-primitives",
- "pallas-txbuilder",
- "rand 0.8.5",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-opener",
- "tempfile",
- "tokio",
- "toml 0.9.5",
- "utxorpc",
-]
-
-[[package]]
 name = "cml-chain"
 version = "6.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5128,6 +5098,36 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.106",
+]
+
+[[package]]
+name = "thresh"
+version = "0.1.0"
+dependencies = [
+ "bech32 0.11.0",
+ "bip39",
+ "cardano-multiplatform-lib",
+ "cryptoxide 0.5.1",
+ "dirs 5.0.1",
+ "ed25519-bip32",
+ "ed25519-dalek",
+ "hex",
+ "lazy_static",
+ "pallas-addresses",
+ "pallas-codec",
+ "pallas-crypto",
+ "pallas-primitives",
+ "pallas-txbuilder",
+ "rand 0.8.5",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-opener",
+ "tempfile",
+ "tokio",
+ "toml 0.9.5",
+ "utxorpc",
 ]
 
 [[package]]

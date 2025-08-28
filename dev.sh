@@ -56,9 +56,9 @@ show_status() {
     fi
     
     # Check if Tauri binary exists
-    if [ -f "$TAURI_DIR/target/release/cip-30-wallet" ]; then
+    if [ -f "$TAURI_DIR/target/release/thresh" ]; then
         echo -e "${GREEN}✓${NC} Tauri app (release) built"
-    elif [ -f "$TAURI_DIR/target/debug/cip-30-wallet" ]; then
+    elif [ -f "$TAURI_DIR/target/debug/thresh" ]; then
         echo -e "${YELLOW}△${NC} Tauri app (debug) built"
     else
         echo -e "${RED}✗${NC} Tauri app not built"
@@ -73,8 +73,8 @@ show_status() {
     fi
     
     # Check if log file exists
-    if [ -f "/tmp/tauri-wallet-native-messaging.log" ]; then
-        echo -e "${GREEN}✓${NC} Log file exists ($(wc -l < /tmp/tauri-wallet-native-messaging.log) lines)"
+    if [ -f "/tmp/thresh.log" ]; then
+        echo -e "${GREEN}✓${NC} Log file exists ($(wc -l < /tmp/thresh.log) lines)"
     else
         echo -e "${YELLOW}△${NC} No log file (extension not used yet)"
     fi
@@ -155,7 +155,7 @@ case "${1:-help}" in
         ;;
         
     "test-native")
-        if [ -f "$HOME/.local/bin/cip-30-wallet-native" ]; then
+        if [ -f "$HOME/.local/bin/thresh" ]; then
             echo -e "${BLUE}Testing native messaging host...${NC}"
             echo '{"type":"ping","requestId":123}' | python3 -c "
 import json
@@ -167,7 +167,7 @@ message = sys.stdin.read().strip()
 encoded = message.encode('utf-8')
 length = struct.pack('<I', len(encoded))
 
-proc = subprocess.Popen(['$HOME/.local/bin/cip-30-wallet-native'],
+proc = subprocess.Popen(['$HOME/.local/bin/thresh'],
                        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 proc.stdin.write(length + encoded)
 proc.stdin.close()
