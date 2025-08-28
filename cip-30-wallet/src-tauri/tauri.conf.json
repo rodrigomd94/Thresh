@@ -12,11 +12,18 @@
   "app": {
     "windows": [
       {
-        "title": "cip-30-wallet",
+        "title": "Thresh Wallet",
         "width": 800,
-        "height": 600
+        "height": 600,
+        "visible": false,
+        "skipTaskbar": true
       }
     ],
+    "trayIcon": {
+      "iconPath": "icons/tray-icon.png",
+      "iconAsTemplate": true,
+      "menuOnLeftClick": false
+    },
     "security": {
       "csp": null
     }

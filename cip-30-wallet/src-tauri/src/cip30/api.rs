@@ -1,11 +1,12 @@
 use serde_json::{json, Value};
 use super::types::*;
+use super::signing::get_private_key_for_signing;
 use crate::commands::{AppState, AddressInfo};
 use crate::wallet::{derive_addresses_from_wallet, get_change_address_from_wallet, get_reward_addresses_from_wallet};
 use std::sync::Mutex;
 use tauri::State;
 
-pub async fn handle_cip30_request(method: &str, params: Value, app_state: Option<&AppState>) -> Result<Value, String> {
+pub async fn handle_cip30_request(method: &str, params: Value, app_state: Option<&AppState>, app_handle: Option<tauri::AppHandle>) -> Result<Value, String> {
     eprintln!("[API] Handling CIP-30 method: {}", method);
     
     let result = match method {
@@ -49,7 +50,7 @@ pub async fn handle_cip30_request(method: &str, params: Value, app_state: Option
         },
         "signTx" => {
             eprintln!("[API] signTx called with params: {}", serde_json::to_string(&params).unwrap_or_else(|_| "Invalid JSON".to_string()));
-            sign_tx(params)
+            sign_tx(params, app_state, app_handle).await
         },
         "signData" => {
             eprintln!("[API] signData called with params: {}", serde_json::to_string(&params).unwrap_or_else(|_| "Invalid JSON".to_string()));
@@ -439,13 +440,38 @@ fn get_reward_addresses(app_state: Option<&AppState>) -> Result<Value, String> {
     Ok(json!(addresses))
 }
 
-fn sign_tx(params: Value) -> Result<Value, String> {
-    // Mock signature - in real implementation, would sign the transaction
-    let tx = params.get("tx").ok_or("Missing tx parameter")?;
+async fn sign_tx(params: Value, app_state: Option<&AppState>, app_handle: Option<tauri::AppHandle>) -> Result<Value, String> {
+    eprintln!("[API] sign_tx called with params: {}", params);
     
-    // Return mock witness set (CBOR hex)
+    // Check that we have app state - we can't sign without it
+    let app_state = app_state.ok_or("App state not available - cannot sign transactions in this context")?;
+    let app_handle = app_handle.ok_or("App handle not available - cannot show UI for signing")?;
+    
+    // Extract transaction hex
+    let tx_hex = params.get("tx")
+        .and_then(|v| v.as_str())
+        .ok_or("Missing or invalid tx parameter")?;
+    
+    // Decode and validate the transaction
+    let tx_bytes = hex::decode(tx_hex)
+        .map_err(|e| format!("Failed to decode tx hex: {}", e))?;
+    let _pallas_tx = pallas_codec::minicbor::decode::<pallas_primitives::conway::Tx>(&tx_bytes)
+        .map_err(|e| format!("Failed to decode tx CBOR: {}", e))?;
+    
+    // Show window and get private key
+    eprintln!("[API] Showing password dialog for transaction signing");
+    let _private_key = get_private_key_for_signing(tx_hex, app_state, &app_handle).await?;
+    eprintln!("[API] Obtained private key for signing");
+    
+    // TODO: Use the private_key to actually sign the transaction
+    // For now, return a mock witness set
+    let mock_vkey = "8200582c82008202828200581c4d7b4fae42073d8175d1daa7ed8b7f46055bc8b48bbec1104110b13e";
+    let mock_signature = "845846a201025820aceecdf2f7e5a0a91a6a0e06cb051d87e8827fd08cb44666c39948e2b2e3f79a5840d548cb87170df840754dc81dd5ae73f8bbb770a5826a45bb90b3186d1d8f5fb8a73ad13be8bb0a85bbf9dd1b195b9c96fc1914b3bf50e46cf473d33b730b50c";
+    
+    let witness_set = format!("a10081825820{}5840{}", mock_vkey, mock_signature);
+    
     Ok(json!({
-        "witness": format!("{}{}{}{}", "a10081825820", "7fxv2umyhttkxyxp8x0dlpdt3k6cwng5pxj3jhsydzer3n0d3vllmyqwsx5wktcd8cc3sq835lu7drv2xwl2wywfg", "5840", "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
+        "witness": witness_set
     }))
 }
 
@@ -471,3 +497,4 @@ fn submit_tx(params: Value) -> Result<Value, String> {
         "txHash": "9fxv2umyhttkxyxp8x0dlpdt3k6cwng5pxj3jhsydzer3n0d3vllmyqwsx5wktcd8cc3sq835lu7drv2xwl2wywfgse35a3x"
     }))
 }
+

@@ -8,10 +8,18 @@ use crate::wallet::{WalletError, WalletResult, derive_addresses_from_wallet};
 use crate::config::AppConfig;
 use crate::utxorpc::UtxoRpcClient;
 use std::fs;
-use pallas_crypto::key::ed25519;
+use std::collections::HashMap;
+use std::sync::mpsc::Sender;
 use serde::{Deserialize, Serialize};
-use std::{hash::Hash, sync::Mutex};
-use tauri::State;
+use std::sync::Mutex;
+use tauri::{State, Manager, Emitter};
+use lazy_static::lazy_static;
+
+// Global state for pending password requests
+lazy_static! {
+    static ref PENDING_PASSWORD_REQUESTS: Mutex<HashMap<String, Sender<Result<String, String>>>> = 
+        Mutex::new(HashMap::new());
+}
 /// Application state to hold the wallet store and configuration
 pub struct AppState {
     pub wallet_store: Mutex<WalletStore>,
@@ -443,4 +451,117 @@ pub fn create_app_state() -> Result<AppState, String> {
         runtime_network: Mutex::new(runtime_network),
         utxorpc_client: Mutex::new(utxorpc_client),
     })
+}
+
+// Transaction Signing Commands
+
+#[tauri::command]
+pub async fn prompt_transaction_password(
+    tx_cbor: String,
+    wallet_id: String,
+    window: tauri::WebviewWindow,
+    app_handle: tauri::AppHandle,
+) -> Result<String, String> {
+    // First, bring the window to front
+    window.show()
+        .map_err(|e| format!("Failed to show window: {}", e))?;
+    window.unminimize()
+        .map_err(|e| format!("Failed to unminimize window: {}", e))?;
+    window.set_focus()
+        .map_err(|e| format!("Failed to focus window: {}", e))?;
+    
+    // Create a one-shot channel to receive the password from the frontend
+    let (tx, rx) = std::sync::mpsc::channel::<Result<String, String>>();
+    
+    // Store the sender in the app state so the frontend can send the password back
+    let tx_id = format!("tx_{}", std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis());
+    
+    // Emit event to frontend to show password dialog
+    app_handle.emit("request-password", serde_json::json!({
+        "txId": tx_id,
+        "walletId": wallet_id,
+        "txCbor": tx_cbor,
+    })).map_err(|e| format!("Failed to emit event: {}", e))?;
+    
+    // Store the channel sender temporarily
+    {
+        let mut pending_requests = PENDING_PASSWORD_REQUESTS.lock().unwrap();
+        pending_requests.insert(tx_id.clone(), tx);
+    }
+    
+    // Wait for password from frontend (with timeout)
+    match rx.recv_timeout(std::time::Duration::from_secs(300)) { // 5 minute timeout
+        Ok(Ok(password)) => Ok(password),
+        Ok(Err(e)) => Err(e),
+        Err(_) => {
+            // Clean up on timeout
+            let mut pending_requests = PENDING_PASSWORD_REQUESTS.lock().unwrap();
+            pending_requests.remove(&tx_id);
+            Err("Password prompt timeout".to_string())
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn submit_transaction_password(
+    tx_id: String,
+    password: Option<String>,
+) -> Result<(), String> {
+    let mut pending_requests = PENDING_PASSWORD_REQUESTS.lock().unwrap();
+    
+    if let Some(sender) = pending_requests.remove(&tx_id) {
+        match password {
+            Some(pwd) => {
+                sender.send(Ok(pwd))
+                    .map_err(|_| "Failed to send password".to_string())?;
+            }
+            None => {
+                sender.send(Err("User cancelled".to_string()))
+                    .map_err(|_| "Failed to send cancellation".to_string())?;
+            }
+        }
+        Ok(())
+    } else {
+        Err("Invalid transaction ID".to_string())
+    }
+}
+
+// Helper function to get signing key from wallet
+pub fn get_signing_key_from_wallet(
+    wallet_id: &str,
+    password: &str,
+    state: &AppState,
+) -> Result<[u8; 32], String> {
+    let store = state.wallet_store.lock().unwrap();
+    
+    // Load the wallet with the provided password
+    let wallet = store.load_wallet(wallet_id, password)
+        .map_err(|e| match e {
+            WalletError::InvalidPassword => "Invalid password".to_string(),
+            _ => format!("Failed to load wallet: {}", e),
+        })?;
+    
+    // Generate seed from mnemonic
+    let seed = mnemonic_to_seed(&wallet.mnemonic, "")
+        .map_err(|e| format!("Failed to generate seed: {}", e))?;
+    
+    // Derive master private key
+    let master_private_key = Bip32PrivateKey::from_bip39_seed(&seed)
+        .map_err(|e| format!("Failed to generate master key: {}", e))?;
+    
+    // For now, we'll use the first account's first external address key
+    // In a real implementation, you'd determine which key to use based on the transaction
+    // Derive to: m/1852'/1815'/0'/0/0
+    let signing_key = master_private_key
+        .derive(1852 | 0x80000000)  // purpose (hardened)
+        .derive(1815 | 0x80000000)  // coin_type (hardened)
+        .derive(0 | 0x80000000)     // account (hardened)
+        .derive(0)                  // external chain
+        .derive(0)                  // first address
+        .to_signing_key();
+    
+    Ok(signing_key)
 }
