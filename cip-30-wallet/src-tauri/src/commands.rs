@@ -602,6 +602,48 @@ pub async fn submit_transaction_password(
     }
 }
 
+// Transaction Submission Commands
+
+#[tauri::command]
+pub async fn submit_tx_with_state(
+    tx_cbor_hex: String,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    eprintln!("[CMD] submit_tx_with_state called with transaction length: {}", tx_cbor_hex.len());
+
+    // Get current network
+    let runtime_network = load_runtime_network();
+    let network = runtime_network.unwrap_or_else(|| state.config.get_network());
+    
+    // Check if UTxO RPC is configured
+    let utxorpc_config = state.config.utxorpc.as_ref()
+        .ok_or("UTxO RPC not configured - cannot submit transactions")?;
+
+    eprintln!("[CMD] Creating UTxO RPC client for transaction submission");
+    
+    // Create fresh client for submission
+    match crate::utxorpc::UtxoRpcClient::new(utxorpc_config.clone()).await {
+        Ok(mut client) => {
+            eprintln!("[CMD] UTxO RPC client created, submitting transaction...");
+            
+            match client.submit_transaction(&tx_cbor_hex, network).await {
+                Ok(tx_hash) => {
+                    eprintln!("[CMD] Transaction submitted successfully with hash: {}", tx_hash);
+                    Ok(tx_hash)
+                }
+                Err(e) => {
+                    eprintln!("[CMD] Transaction submission failed: {}", e);
+                    Err(format!("Transaction submission failed: {}", e))
+                }
+            }
+        }
+        Err(e) => {
+            eprintln!("[CMD] Failed to create UTxO RPC client: {}", e);
+            Err(format!("Failed to create UTxO RPC client: {}", e))
+        }
+    }
+}
+
 // Helper function to get signing key from wallet
 pub fn get_signing_key_from_wallet(
     wallet_id: &str,
@@ -626,6 +668,7 @@ pub fn get_signing_key_from_wallet(
     let master_private_key = Bip32PrivateKey::from_bip39_seed(&seed)
         .map_err(|e| format!("Failed to generate master key: {}", e))?;
 
+    //TODO:
     // For now, we'll use the first account's first external address key
     // In a real implementation, you'd determine which key to use based on the transaction
     // Derive to: m/1852'/1815'/0'/0/0

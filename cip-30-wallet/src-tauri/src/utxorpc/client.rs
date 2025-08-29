@@ -5,17 +5,21 @@ use crate::wallet::convert_to_multiasset_positive_coin;
 use serde_json::{json, Value};
 use utxorpc::spec;
 use utxorpc::spec::cardano::TxOutput;
-use utxorpc::{CardanoQueryClient, ClientBuilder};
+use utxorpc::{CardanoQueryClient, CardanoSubmitClient, ClientBuilder};
 
 pub struct UtxoRpcClient {
     mainnet_client: Option<CardanoQueryClient>,
     testnet_client: Option<CardanoQueryClient>,
+    mainnet_submit_client: Option<CardanoSubmitClient>,
+    testnet_submit_client: Option<CardanoSubmitClient>,
 }
 
 impl UtxoRpcClient {
     pub async fn new(config: UtxoRpcConfig) -> Result<Self, String> {
         let mut mainnet_client = None;
         let mut testnet_client = None;
+        let mut mainnet_submit_client = None;
+        let mut testnet_submit_client = None;
 
         // Create mainnet client if URL is provided
         if let Some(mainnet_url) = config.mainnet_url {
@@ -39,12 +43,29 @@ impl UtxoRpcClient {
             };
 
             // build() returns a Future that needs to be awaited
-            eprintln!("[UTxO RPC] Building mainnet client...");
+            eprintln!("[UTxO RPC] Building mainnet query client...");
             mainnet_client = Some(builder.build::<CardanoQueryClient>().await);
             eprintln!(
-                "[UTxO RPC] Successfully created mainnet client for: {}",
+                "[UTxO RPC] Successfully created mainnet query client for: {}",
                 mainnet_url
             );
+
+            // Create submit client with the same configuration
+            let submit_builder = ClientBuilder::new()
+                .uri(&mainnet_url)
+                .map_err(|e| format!("Invalid mainnet URL for submit client: {}", e))?;
+
+            let submit_builder = if let Some(api_key) = &config.api_key {
+                submit_builder
+                    .metadata("dmtr-api-key", api_key)
+                    .map_err(|e| format!("Failed to set API key for submit client: {}", e))?
+            } else {
+                submit_builder
+            };
+
+            eprintln!("[UTxO RPC] Building mainnet submit client...");
+            mainnet_submit_client = Some(submit_builder.build::<CardanoSubmitClient>().await);
+            eprintln!("[UTxO RPC] Successfully created mainnet submit client for: {}", mainnet_url);
         }
 
         // Create testnet client if URL is provided
@@ -69,17 +90,36 @@ impl UtxoRpcClient {
             };
 
             // build() returns a Future that needs to be awaited
-            eprintln!("[UTxO RPC] Building testnet client...");
+            eprintln!("[UTxO RPC] Building testnet query client...");
             testnet_client = Some(builder.build::<CardanoQueryClient>().await);
             eprintln!(
-                "[UTxO RPC] Successfully created testnet client for: {}",
+                "[UTxö RPC] Successfully created testnet query client for: {}",
                 testnet_url
             );
+
+            // Create submit client with the same configuration
+            let submit_builder = ClientBuilder::new()
+                .uri(&testnet_url)
+                .map_err(|e| format!("Invalid testnet URL for submit client: {}", e))?;
+
+            let submit_builder = if let Some(api_key) = &config.api_key {
+                submit_builder
+                    .metadata("dmtr-api-key", api_key)
+                    .map_err(|e| format!("Failed to set API key for testnet submit client: {}", e))?
+            } else {
+                submit_builder
+            };
+
+            eprintln!("[UTxO RPC] Building testnet submit client...");
+            testnet_submit_client = Some(submit_builder.build::<CardanoSubmitClient>().await);
+            eprintln!("[UTxO RPC] Successfully created testnet submit client for: {}", testnet_url);
         }
 
         Ok(Self {
             mainnet_client,
             testnet_client,
+            mainnet_submit_client,
+            testnet_submit_client,
         })
     }
 
@@ -407,6 +447,52 @@ impl UtxoRpcClient {
                 Ok(pallas_primitives::conway::Value::Multiasset(
                     total_ada, multiasset,
                 ))
+            }
+        }
+    }
+
+    /// Submit a transaction to the blockchain
+    pub async fn submit_transaction(
+        &mut self,
+        tx_cbor_hex: &str,
+        network: pallas_addresses::Network,
+    ) -> Result<String, String> {
+        let submit_client = match network {
+            pallas_addresses::Network::Mainnet => self
+                .mainnet_submit_client
+                .as_mut()
+                .ok_or("Mainnet UTxO RPC submit client not configured")?,
+            _ => self
+                .testnet_submit_client
+                .as_mut()
+                .ok_or("Testnet UTxö RPC submit client not configured")?,
+        };
+
+        eprintln!("[UTxO RPC] Submitting transaction: {}", tx_cbor_hex);
+        
+        // Decode the CBOR hex to bytes
+        let tx_bytes = hex::decode(tx_cbor_hex)
+            .map_err(|e| format!("Failed to decode transaction CBOR hex: {}", e))?;
+
+        eprintln!("[UTxO RPC] Transaction bytes length: {}", tx_bytes.len());
+
+        // Submit the transaction using UTXO RPC submit client
+        // submit_tx expects a Vec<Vec<u8>>, so we wrap our single transaction
+        let transactions = vec![tx_bytes];
+        match submit_client.submit_tx(transactions).await {
+            Ok(tx_refs) => {
+                if let Some(tx_ref) = tx_refs.first() {
+                    // The transaction reference is the transaction hash as raw bytes
+                    let tx_hash_hex = hex::encode(tx_ref);
+                    eprintln!("[UTxO RPC] Transaction submitted successfully with hash: {}", tx_hash_hex);
+                    Ok(tx_hash_hex)
+                } else {
+                    Err("No transaction reference returned from submit_tx".to_string())
+                }
+            }
+            Err(e) => {
+                eprintln!("[UTxö RPC] Transaction submission failed: {:?}", e);
+                Err(format!("Failed to submit transaction: {:?}", e))
             }
         }
     }

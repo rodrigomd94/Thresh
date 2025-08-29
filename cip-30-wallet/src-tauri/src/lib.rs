@@ -66,6 +66,8 @@ pub fn run() {
             // Transaction signing commands
             prompt_transaction_password,
             submit_transaction_password,
+            // Transaction submission commands
+            submit_tx_with_state,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -130,6 +132,8 @@ pub fn run_native_messaging() {
             // Transaction signing commands
             prompt_transaction_password,
             submit_transaction_password,
+            // Transaction submission commands
+            submit_tx_with_state,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

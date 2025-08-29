@@ -98,7 +98,7 @@
           throw new Error(result.error);
         }
         
-        return result.witness;
+        return result;
       },
 
       // Sign data

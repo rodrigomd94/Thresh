@@ -8,69 +8,95 @@ use crate::wallet::{derive_addresses_from_wallet, get_change_address_from_wallet
 use std::sync::Mutex;
 use tauri::State;
 
+// Macro to log API messages to both stderr and file
+macro_rules! log_api {
+    ($($arg:tt)*) => {
+        {
+            let message = format!($($arg)*);
+            eprintln!("{}", message);
+            
+            // Also write to log file for native messaging mode
+            let log_msg = format!(
+                "{}: {}\n",
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs(),
+                message
+            );
+            
+            let _ = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open("/tmp/thresh.log")
+                .and_then(|mut f| std::io::Write::write_all(&mut f, log_msg.as_bytes()));
+        }
+    };
+}
+
 pub async fn handle_cip30_request(method: &str, params: Value, app_state: Option<&AppState>, app_handle: Option<tauri::AppHandle>) -> Result<Value, String> {
-    eprintln!("[API] Handling CIP-30 method: {}", method);
+    log_api!("[API] Handling CIP-30 method: {}", method);
     
     let result = match method {
         "getExtensions" => {
-            eprintln!("[API] getExtensions called");
+            log_api!("[API] getExtensions called");
             get_extensions()
         },
         //DONE
         "getNetworkId" => {
-            eprintln!("[API] getNetworkId called");
+            log_api!("[API] getNetworkId called");
             get_network_id(app_state)
         },
         //DONE
         "getUtxos" => {
-            eprintln!("[API] getUtxos called with params: {}", serde_json::to_string(&params).unwrap_or_else(|_| "Invalid JSON".to_string()));
+            log_api!("[API] getUtxos called with params: {}", serde_json::to_string(&params).unwrap_or_else(|_| "Invalid JSON".to_string()));
             get_utxos(params, app_state).await
         },
         "getBalance" => {
-            eprintln!("[API] getBalance called");
+            log_api!("[API] getBalance called");
             get_balance(app_state).await
         },
         //DONE
         "getUsedAddresses" => {
-            eprintln!("[API] getUsedAddresses called with params: {}", serde_json::to_string(&params).unwrap_or_else(|_| "Invalid JSON".to_string()));
+            log_api!("[API] getUsedAddresses called with params: {}", serde_json::to_string(&params).unwrap_or_else(|_| "Invalid JSON".to_string()));
             get_used_addresses(app_state).await
         },
         //DONE
         "getUnusedAddresses" => {
-            eprintln!("[API] getUnusedAddresses called");
+            log_api!("[API] getUnusedAddresses called");
             get_unused_addresses(app_state).await
         },
         //DONE
         "getChangeAddress" => {
-            eprintln!("[API] getChangeAddress called");
+            log_api!("[API] getChangeAddress called");
             get_change_address(app_state)
         },
         //DONE
         "getRewardAddresses" => {
-            eprintln!("[API] getRewardAddresses called");
+            log_api!("[API] getRewardAddresses called");
             get_reward_addresses(app_state)
         },
         "signTx" => {
-            eprintln!("[API] signTx called with params: {}", serde_json::to_string(&params).unwrap_or_else(|_| "Invalid JSON".to_string()));
+            log_api!("[API] signTx called with params: {}", serde_json::to_string(&params).unwrap_or_else(|_| "Invalid JSON".to_string()));
             sign_tx(params, app_state, app_handle).await
         },
         "signData" => {
-            eprintln!("[API] signData called with params: {}", serde_json::to_string(&params).unwrap_or_else(|_| "Invalid JSON".to_string()));
+            log_api!("[API] signData called with params: {}", serde_json::to_string(&params).unwrap_or_else(|_| "Invalid JSON".to_string()));
             sign_data(params)
         },
         "submitTx" => {
-            eprintln!("[API] submitTx called with params: {}", serde_json::to_string(&params).unwrap_or_else(|_| "Invalid JSON".to_string()));
-            submit_tx(params)
+            log_api!("[API] submitTx called with params: {}", serde_json::to_string(&params).unwrap_or_else(|_| "Invalid JSON".to_string()));
+            submit_tx(params, app_state).await
         },
         _ => {
-            eprintln!("[API] Unknown method: {}", method);
+            log_api!("[API] Unknown method: {}", method);
             Err(format!("Unknown method: {}", method))
         },
     };
     
     match &result {
-        Ok(data) => eprintln!("[API] Method {} succeeded with result: {}", method, serde_json::to_string(data).unwrap_or_else(|_| "Invalid JSON".to_string())),
-        Err(error) => eprintln!("[API] Method {} failed with error: {}", method, error),
+        Ok(data) => log_api!("[API] Method {} succeeded with result: {}", method, serde_json::to_string(data).unwrap_or_else(|_| "Invalid JSON".to_string())),
+        Err(error) => log_api!("[API] Method {} failed with error: {}", method, error),
     }
     
     result
@@ -81,48 +107,48 @@ fn get_extensions() -> Result<Value, String> {
 }
 
 fn get_network_id(app_state: Option<&AppState>) -> Result<Value, String> {
-    eprintln!("[API] getNetworkId called");
+    log_api!("[API] getNetworkId called");
     
     let app_state = match app_state {
         Some(state) => state,
         None => {
-            eprintln!("[API] ERROR: App state not available");
+            log_api!("[API] ERROR: App state not available");
             return Err("App state not available".to_string());
         }
     };
     
     // Force reload of runtime network to pick up UI changes
-    eprintln!("[API] Loading runtime network...");
+    log_api!("[API] Loading runtime network...");
     let runtime_network = load_runtime_network_direct();
-    eprintln!("[API] Runtime network result: {:?}", runtime_network);
+    log_api!("[API] Runtime network result: {:?}", runtime_network);
     
     // Use runtime override if available, otherwise fall back to config
     let network = runtime_network.unwrap_or_else(|| {
-        eprintln!("[API] No runtime network, using config default");
+        log_api!("[API] No runtime network, using config default");
         app_state.config.get_network()
     });
     
-    eprintln!("[API] Final network to use: {:?}", network);
+    log_api!("[API] Final network to use: {:?}", network);
     
     // CIP-30 specification: 1 = mainnet, 0 = testnet (return just the number)
     let network_id = match network {
         pallas_addresses::Network::Mainnet => {
-            eprintln!("[API] Network is Mainnet, returning 1");
+            log_api!("[API] Network is Mainnet, returning 1");
             1
         },
         pallas_addresses::Network::Testnet => {
-            eprintln!("[API] Network is Testnet, returning 0");
+            log_api!("[API] Network is Testnet, returning 0");
             0
         },
         pallas_addresses::Network::Other(n) => {
-            eprintln!("[API] Network is Other({}), returning 0", n);
+            log_api!("[API] Network is Other({}), returning 0", n);
             0
         }
     };
     
-    eprintln!("[API] About to return network ID: {}", network_id);
+    log_api!("[API] About to return network ID: {}", network_id);
     let result = Ok(json!(network_id));
-    eprintln!("[API] Final result: {:?}", result);
+    log_api!("[API] Final result: {:?}", result);
     result
 }
 
@@ -131,42 +157,42 @@ fn load_runtime_network_direct() -> Option<pallas_addresses::Network> {
     let data_dir = dirs::data_dir()?;
     let path = data_dir.join("thresh-wallet").join("runtime_network.txt");
     
-    eprintln!("[API] Checking runtime network file at: {:?}", path);
+    log_api!("[API] Checking runtime network file at: {:?}", path);
     
     if !path.exists() {
-        eprintln!("[API] No runtime network file found at {:?}", path);
+        log_api!("[API] No runtime network file found at {:?}", path);
         return None;
     }
     
     let content = match std::fs::read_to_string(&path) {
         Ok(content) => content,
         Err(e) => {
-            eprintln!("[API] Failed to read runtime network file: {}", e);
+            log_api!("[API] Failed to read runtime network file: {}", e);
             return None;
         }
     };
     
     let network_name = content.trim();
-    eprintln!("[API] Raw file content: '{}'", content);
-    eprintln!("[API] Trimmed network name: '{}'", network_name);
-    eprintln!("[API] Network name length: {}", network_name.len());
+    log_api!("[API] Raw file content: '{}'", content);
+    log_api!("[API] Trimmed network name: '{}'", network_name);
+    log_api!("[API] Network name length: {}", network_name.len());
     
     let result = match network_name.to_lowercase().as_str() {
         "mainnet" => {
-            eprintln!("[API] Matched mainnet");
+            log_api!("[API] Matched mainnet");
             Some(pallas_addresses::Network::Mainnet)
         },
         "testnet" => {
-            eprintln!("[API] Matched testnet");
+            log_api!("[API] Matched testnet");
             Some(pallas_addresses::Network::Testnet)
         },
         other => {
-            eprintln!("[API] Unknown network: '{}'", other);
+            log_api!("[API] Unknown network: '{}'", other);
             None
         }
     };
     
-    eprintln!("[API] Returning network: {:?}", result);
+    log_api!("[API] Returning network: {:?}", result);
     result
 }
 
@@ -203,10 +229,10 @@ async fn get_utxos(params: Value, app_state: Option<&AppState>) -> Result<Value,
             Ok(addr) => {
                 let hex_addr = addr.to_hex();
                 hex_addresses.push(hex_addr);
-                eprintln!("[API] Added payment address: {} (hex: {})", addr_info.address, hex_addresses.last().unwrap());
+                log_api!("[API] Added payment address: {} (hex: {})", addr_info.address, hex_addresses.last().unwrap());
             },
             Err(e) => {
-                eprintln!("[API] Failed to convert address to hex: {} - {}", addr_info.address, e);
+                log_api!("[API] Failed to convert address to hex: {} - {}", addr_info.address, e);
             }
         }
     }
@@ -215,30 +241,30 @@ async fn get_utxos(params: Value, app_state: Option<&AppState>) -> Result<Value,
         return Err("No valid hex addresses for UTxO query".to_string());
     }
     
-    eprintln!("[API] Using {} payment addresses for UTxO query", hex_addresses.len());
+    log_api!("[API] Using {} payment addresses for UTxO query", hex_addresses.len());
     
     // Try to use UTxO RPC client if available
     if let Some(ref utxorpc_config) = app_state.config.utxorpc {
-        eprintln!("[API] Creating fresh UTxO RPC client for request");
+        log_api!("[API] Creating fresh UTxO RPC client for request");
         match crate::utxorpc::UtxoRpcClient::new(utxorpc_config.clone()).await {
             Ok(mut fresh_client) => {
-                eprintln!("[API] Fresh UTxO RPC client created, fetching UTxOs from {} addresses", hex_addresses.len());
+                log_api!("[API] Fresh UTxO RPC client created, fetching UTxOs from {} addresses", hex_addresses.len());
                 match fresh_client.fetch_utxos_by_exact_addresses(&hex_addresses, network, Some(50)).await {
                     Ok(utxos) => {
-                        eprintln!("[API] Successfully fetched UTxOs via exact addresses UTxO RPC");
+                        log_api!("[API] Successfully fetched UTxOs via exact addresses UTxO RPC");
                         return Ok(utxos);
                     },
                     Err(e) => {
-                        eprintln!("[API] UTxO RPC by exact addresses failed: {}, falling back to mock data", e);
+                        log_api!("[API] UTxO RPC by exact addresses failed: {}, falling back to mock data", e);
                     }
                 }
             },
             Err(e) => {
-                eprintln!("[API] Failed to create fresh UTxO RPC client: {}", e);
+                log_api!("[API] Failed to create fresh UTxO RPC client: {}", e);
             }
         }
     } else {
-        eprintln!("[API] UTxO RPC not configured, using mock data");
+        log_api!("[API] UTxO RPC not configured, using mock data");
     }
     
     
@@ -278,10 +304,10 @@ async fn get_balance(app_state: Option<&AppState>) -> Result<Value, String> {
             Ok(addr) => {
                 let hex_addr = addr.to_hex();
                 hex_addresses.push(hex_addr);
-                eprintln!("[API] Added address for balance: {}", addr_info.address);
+                log_api!("[API] Added address for balance: {}", addr_info.address);
             },
             Err(e) => {
-                eprintln!("[API] Failed to convert address to hex for balance: {} - {}", addr_info.address, e);
+                log_api!("[API] Failed to convert address to hex for balance: {} - {}", addr_info.address, e);
             }
         }
     }
@@ -290,24 +316,24 @@ async fn get_balance(app_state: Option<&AppState>) -> Result<Value, String> {
         return Err("No valid hex addresses for balance calculation".to_string());
     }
     
-    eprintln!("[API] Calculating balance from {} payment addresses", hex_addresses.len());
+    log_api!("[API] Calculating balance from {} payment addresses", hex_addresses.len());
     
     // Try to use UTxO RPC client if available
     if let Some(ref utxorpc_config) = app_state.config.utxorpc {
-        eprintln!("[API] Creating fresh UTxO RPC client for balance calculation");
+        log_api!("[API] Creating fresh UTxO RPC client for balance calculation");
         match crate::utxorpc::UtxoRpcClient::new(utxorpc_config.clone()).await {
             Ok(mut fresh_client) => {
-                eprintln!("[API] Fresh UTxO RPC client created, calculating balance");
+                log_api!("[API] Fresh UTxO RPC client created, calculating balance");
                 match fresh_client.fetch_balance_from_addresses(&hex_addresses, network, Some(50)).await {
                     Ok(balance_value) => {
-                        eprintln!("[API] Successfully calculated balance via UTxO RPC");
+                        log_api!("[API] Successfully calculated balance via UTxO RPC");
                         
                         // CBOR encode the balance Value
                         let cbor_bytes = pallas_codec::minicbor::to_vec(&balance_value)
                             .map_err(|e| format!("Failed to CBOR encode balance: {}", e))?;
                         let cbor_hex = hex::encode(cbor_bytes);
                         
-                        eprintln!("[API] Balance CBOR hex: {}", cbor_hex);
+                        log_api!("[API] Balance CBOR hex: {}", cbor_hex);
                         return Ok(json!(cbor_hex));
                     },
                     Err(e) => {
@@ -342,7 +368,7 @@ async fn get_used_addresses(app_state: Option<&AppState>) -> Result<Value, Strin
     let runtime_network = load_runtime_network_direct();
     let network = runtime_network.unwrap_or_else(|| app_state.config.get_network());
     
-    eprintln!("[API] get_used_addresses using network: {:?}", network);
+    log_api!("[API] get_used_addresses using network: {:?}", network);
     let addresses = derive_addresses_from_wallet(&store, wallet_id, 0, 5, network)?;
     
     // Convert addresses to hex format for CIP-30
@@ -376,7 +402,7 @@ async fn get_unused_addresses(app_state: Option<&AppState>) -> Result<Value, Str
     let runtime_network = load_runtime_network_direct();
     let network = runtime_network.unwrap_or_else(|| app_state.config.get_network());
     
-    eprintln!("[API] get_unused_addresses using network: {:?}", network);
+    log_api!("[API] get_unused_addresses using network: {:?}", network);
     let addresses = derive_addresses_from_wallet(&store, wallet_id, 0, 5, network)?;
     
     // Convert addresses to hex format for CIP-30
@@ -410,7 +436,7 @@ fn get_change_address(app_state: Option<&AppState>) -> Result<Value, String> {
     let runtime_network = load_runtime_network_direct();
     let network = runtime_network.unwrap_or_else(|| app_state.config.get_network());
     
-    eprintln!("[API] get_change_addresses using network: {:?}", network);
+    log_api!("[API] get_change_addresses using network: {:?}", network);
     let addr_info = get_change_address_from_wallet(&store, wallet_id, 0, network)?;
     
     // Convert addresses to hex format for CIP-30
@@ -443,7 +469,7 @@ fn get_reward_addresses(app_state: Option<&AppState>) -> Result<Value, String> {
 }
 
 async fn sign_tx(params: Value, app_state: Option<&AppState>, app_handle: Option<tauri::AppHandle>) -> Result<Value, String> {
-    eprintln!("[API] sign_tx called with params: {}", params);
+    log_api!("[API] sign_tx called with params: {}", params);
     
     // Check that we have app state - we can't sign without it
     let app_state = app_state.ok_or("App state not available - cannot sign transactions in this context")?;
@@ -464,13 +490,13 @@ async fn sign_tx(params: Value, app_state: Option<&AppState>, app_handle: Option
     let tx_body_cbor = pallas_codec::minicbor::to_vec(&pallas_tx.transaction_body)
         .map_err(|e| format!("Failed to re-encode tx body to CBOR: {}", e))?;
     let tx_hash = pallas_crypto::hash::Hasher::<256>::hash(&tx_body_cbor);
-        eprintln!("[API] Transaction hash: {}", hex::encode(tx_hash)); 
+        log_api!("[API] Transaction hash: {}", hex::encode(tx_hash)); 
 
-    eprintln!("[API] Decoded transaction: {:?}", pallas_tx);    
+    log_api!("[API] Decoded transaction: {:?}", pallas_tx);    
     // Show window and get private key
-    eprintln!("[API] Showing password dialog for transaction signing");
+    log_api!("[API] Showing password dialog for transaction signing");
     let signing_key = get_private_key_for_signing(tx_hex, app_state, &app_handle).await?;
-    eprintln!("[API] Obtained private key for signing");
+    log_api!("[API] Obtained private key for signing");
     let private_key = pallas_crypto::key::ed25519::SecretKey::from(signing_key);
     let public_key = private_key.public_key();
     let signature: [u8; pallas_crypto::key::ed25519::Signature::SIZE] = private_key
@@ -494,12 +520,20 @@ async fn sign_tx(params: Value, app_state: Option<&AppState>, app_handle: Option
     pallas_tx.transaction_witness_set.vkeywitness =
                     Some(NonEmptySet::from_vec(vkey_witnesses).unwrap());
 
+    // According to CIP-30, signTx should return only the TransactionWitnessSet, not the full transaction
+    let witness_set_cbor = pallas_codec::minicbor::to_vec(&pallas_tx.transaction_witness_set)
+        .map_err(|e| format!("Failed to encode witness set to CBOR: {}", e))?;
+    let witness_set_hex = hex::encode(witness_set_cbor);
+    log_api!("[API] Transaction witness set hex: {}", witness_set_hex);
+    
+    // For debugging, also log what the full signed transaction would be
     let signed_tx_cbor = pallas_codec::minicbor::to_vec(&pallas_tx)
         .map_err(|e| format!("Failed to encode signed transaction to CBOR: {}", e))?;
     let signed_tx_hex = hex::encode(signed_tx_cbor);
-    eprintln!("[API] Signed transaction hex: {}", signed_tx_hex);
+    log_api!("[API] Full signed transaction hex (for debugging): {}", signed_tx_hex);
     
-    Ok(json!(signed_tx_hex))
+    // Return only the witness set as per CIP-30 specification
+    Ok(json!(witness_set_hex))
 }
 
 fn sign_data(params: Value) -> Result<Value, String> {
@@ -515,13 +549,46 @@ fn sign_data(params: Value) -> Result<Value, String> {
     }))
 }
 
-fn submit_tx(params: Value) -> Result<Value, String> {
-    // Mock transaction submission
-    let tx = params.get("tx").ok_or("Missing tx parameter")?;
+async fn submit_tx(params: Value, app_state: Option<&AppState>) -> Result<Value, String> {
+    let app_state = app_state.ok_or("App state not available - cannot submit transactions")?;
     
-    // Return mock transaction hash
-    Ok(json!({
-        "txHash": "9fxv2umyhttkxyxp8x0dlpdt3k6cwng5pxj3jhsydzer3n0d3vllmyqwsx5wktcd8cc3sq835lu7drv2xwl2wywfgse35a3x"
-    }))
+    // Extract transaction hex
+    let tx_cbor_hex = params.get("tx")
+        .and_then(|v| v.as_str())
+        .ok_or("Missing or invalid tx parameter")?;
+
+    log_api!("[API] Submitting transaction with length: {} characters", tx_cbor_hex.len());
+
+    // Get current network
+    let runtime_network = load_runtime_network_direct();
+    let network = runtime_network.unwrap_or_else(|| app_state.config.get_network());
+    
+    // Check if UTxO RPC is configured
+    let utxorpc_config = app_state.config.utxorpc.as_ref()
+        .ok_or("UTxO RPC not configured - cannot submit transactions")?;
+
+    log_api!("[API] Creating UTxO RPC client for transaction submission");
+    
+    // Create fresh client for submission
+    match crate::utxorpc::UtxoRpcClient::new(utxorpc_config.clone()).await {
+        Ok(mut client) => {
+            log_api!("[API] UTxO RPC client created, submitting transaction...");
+            
+            match client.submit_transaction(tx_cbor_hex, network).await {
+                Ok(tx_hash) => {
+                    log_api!("[API] Transaction submitted successfully with hash: {}", tx_hash);
+                    Ok(json!(tx_hash))
+                }
+                Err(e) => {
+                    log_api!("[API] Transaction submission failed: {}", e);
+                    Err(format!("Transaction submission failed: {}", e))
+                }
+            }
+        }
+        Err(e) => {
+            log_api!("[API] Failed to create UTxO RPC client: {}", e);
+            Err(format!("Failed to create UTxO RPC client: {}", e))
+        }
+    }
 }
 

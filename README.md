@@ -213,10 +213,10 @@ cargo watch -x check -x test -x run
 - [x] `getExtensions()` - Returns supported extensions
 - [x] `getUtxos()` - Fetches UTxOs via UTxO RPC
 - [x] `getBalance()` - Calculates wallet balance
+- [x] `signTx()` - Transaction signing (mock implementation only)
 
 ### ❌ Not Yet Implemented
 
-- [ ] `signTx()` - Transaction signing (mock implementation only)
 - [ ] `signData()` - Data signing (mock implementation only)
 - [ ] `submitTx()` - Transaction submission (mock implementation only)
 
