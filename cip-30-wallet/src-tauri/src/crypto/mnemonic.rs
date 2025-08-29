@@ -1,5 +1,5 @@
-use bip39::{Mnemonic, Language};
 use crate::wallet::{WalletError, WalletResult};
+use bip39::{Language, Mnemonic};
 
 /// Generate a new BIP39 mnemonic phrase
 pub fn generate_mnemonic(word_count: usize) -> WalletResult<Vec<String>> {
@@ -14,18 +14,15 @@ pub fn generate_mnemonic(word_count: usize) -> WalletResult<Vec<String>> {
 
     let entropy_bytes = entropy_bits / 8;
     let mut entropy = vec![0u8; entropy_bytes];
-    
+
     // Generate random entropy
     use rand::RngCore;
     let mut rng = rand::thread_rng();
     rng.fill_bytes(&mut entropy);
 
-    let mnemonic = Mnemonic::from_entropy(&entropy)
-        .map_err(|_| WalletError::InvalidMnemonic)?;
-    
-    let words: Vec<String> = mnemonic.words()
-        .map(|s| s.to_string())
-        .collect();
+    let mnemonic = Mnemonic::from_entropy(&entropy).map_err(|_| WalletError::InvalidMnemonic)?;
+
+    let words: Vec<String> = mnemonic.words().map(|s| s.to_string()).collect();
 
     Ok(words)
 }
@@ -33,7 +30,7 @@ pub fn generate_mnemonic(word_count: usize) -> WalletResult<Vec<String>> {
 /// Validate a mnemonic phrase
 pub fn validate_mnemonic(words: &[String]) -> WalletResult<()> {
     let phrase = words.join(" ");
-    
+
     match Mnemonic::parse_in(Language::English, &phrase) {
         Ok(_) => Ok(()),
         Err(_) => Err(WalletError::InvalidMnemonic),
@@ -43,12 +40,12 @@ pub fn validate_mnemonic(words: &[String]) -> WalletResult<()> {
 /// Convert mnemonic to seed bytes
 pub fn mnemonic_to_seed(words: &[String], passphrase: &str) -> WalletResult<[u8; 64]> {
     let phrase = words.join(" ");
-    
-    let mnemonic = Mnemonic::parse_in(Language::English, &phrase)
-        .map_err(|_| WalletError::InvalidMnemonic)?;
-    
+
+    let mnemonic =
+        Mnemonic::parse_in(Language::English, &phrase).map_err(|_| WalletError::InvalidMnemonic)?;
+
     let seed = mnemonic.to_seed(passphrase);
-    
+
     // Convert Vec<u8> to [u8; 64]
     let mut seed_array = [0u8; 64];
     if seed.len() >= 64 {
@@ -60,10 +57,10 @@ pub fn mnemonic_to_seed(words: &[String], passphrase: &str) -> WalletResult<[u8;
 /// Get entropy from mnemonic (for BIP32 key generation)
 pub fn mnemonic_to_entropy(words: &[String]) -> WalletResult<Vec<u8>> {
     let phrase = words.join(" ");
-    
-    let mnemonic = Mnemonic::parse_in(Language::English, &phrase)
-        .map_err(|_| WalletError::InvalidMnemonic)?;
-    
+
+    let mnemonic =
+        Mnemonic::parse_in(Language::English, &phrase).map_err(|_| WalletError::InvalidMnemonic)?;
+
     Ok(mnemonic.to_entropy())
 }
 

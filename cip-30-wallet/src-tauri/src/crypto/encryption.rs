@@ -1,6 +1,6 @@
+use crate::wallet::{WalletError, WalletResult};
 use cryptoxide::chacha20poly1305::ChaCha20Poly1305;
 use cryptoxide::kdf::argon2;
-use crate::wallet::{WalletError, WalletResult};
 use rand::RngCore;
 
 const VERSION: u8 = 1;
@@ -22,7 +22,8 @@ pub struct EncryptedData {
 impl EncryptedData {
     /// Serialize to bytes following Pallas format: version || salt || nonce || tag || ciphertext
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut bytes = Vec::with_capacity(1 + SALT_SIZE + NONCE_SIZE + TAG_SIZE + self.ciphertext.len());
+        let mut bytes =
+            Vec::with_capacity(1 + SALT_SIZE + NONCE_SIZE + TAG_SIZE + self.ciphertext.len());
         bytes.push(self.version);
         bytes.extend_from_slice(&self.salt);
         bytes.extend_from_slice(&self.nonce);
@@ -34,12 +35,17 @@ impl EncryptedData {
     /// Deserialize from bytes
     pub fn from_bytes(bytes: &[u8]) -> WalletResult<Self> {
         if bytes.len() < 1 + SALT_SIZE + NONCE_SIZE + TAG_SIZE {
-            return Err(WalletError::CryptoError("Invalid encrypted data size".to_string()));
+            return Err(WalletError::CryptoError(
+                "Invalid encrypted data size".to_string(),
+            ));
         }
 
         let version = bytes[0];
         if version != VERSION {
-            return Err(WalletError::CryptoError(format!("Unsupported version: {}", version)));
+            return Err(WalletError::CryptoError(format!(
+                "Unsupported version: {}",
+                version
+            )));
         }
 
         let mut salt = [0u8; SALT_SIZE];
@@ -49,7 +55,9 @@ impl EncryptedData {
         nonce.copy_from_slice(&bytes[1 + SALT_SIZE..1 + SALT_SIZE + NONCE_SIZE]);
 
         let mut tag = [0u8; TAG_SIZE];
-        tag.copy_from_slice(&bytes[1 + SALT_SIZE + NONCE_SIZE..1 + SALT_SIZE + NONCE_SIZE + TAG_SIZE]);
+        tag.copy_from_slice(
+            &bytes[1 + SALT_SIZE + NONCE_SIZE..1 + SALT_SIZE + NONCE_SIZE + TAG_SIZE],
+        );
 
         let ciphertext = bytes[1 + SALT_SIZE + NONCE_SIZE + TAG_SIZE..].to_vec();
 
@@ -68,7 +76,7 @@ pub fn encrypt_with_password(data: &[u8], password: &str) -> WalletResult<Encryp
     // Generate random salt and nonce
     let mut salt = [0u8; SALT_SIZE];
     let mut nonce = [0u8; NONCE_SIZE];
-    
+
     let mut rng = rand::thread_rng();
     rng.fill_bytes(&mut salt);
     rng.fill_bytes(&mut nonce);
@@ -79,7 +87,7 @@ pub fn encrypt_with_password(data: &[u8], password: &str) -> WalletResult<Encryp
         password.as_bytes(),
         &salt,
         &[],
-        &[]
+        &[],
     );
 
     // Encrypt with ChaCha20Poly1305
@@ -106,7 +114,7 @@ pub fn decrypt_with_password(encrypted: &EncryptedData, password: &str) -> Walle
         password.as_bytes(),
         &encrypted.salt,
         &[],
-        &[]
+        &[],
     );
 
     // Decrypt with ChaCha20Poly1305

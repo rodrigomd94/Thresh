@@ -1,7 +1,7 @@
-pub mod mnemonic;
-pub mod keys;
 pub mod encryption;
+pub mod keys;
+pub mod mnemonic;
 
-pub use mnemonic::*;
-pub use keys::*;
 pub use encryption::*;
+pub use keys::*;
+pub use mnemonic::*;

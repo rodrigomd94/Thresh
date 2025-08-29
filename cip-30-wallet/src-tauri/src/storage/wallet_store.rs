@@ -1,8 +1,8 @@
 use crate::crypto::encryption::{EncryptedData, WalletWrapper};
 use crate::wallet::{WalletError, WalletResult};
+use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::{ PathBuf};
-use serde::{Serialize, Deserialize};
+use std::path::PathBuf;
 
 /// Wallet metadata stored in plain text
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -23,8 +23,9 @@ impl WalletStore {
     pub fn new(data_dir: PathBuf) -> WalletResult<Self> {
         // Ensure data directory exists
         if !data_dir.exists() {
-            fs::create_dir_all(&data_dir)
-                .map_err(|e| WalletError::StorageError(format!("Failed to create data directory: {}", e)))?;
+            fs::create_dir_all(&data_dir).map_err(|e| {
+                WalletError::StorageError(format!("Failed to create data directory: {}", e))
+            })?;
         }
 
         Ok(Self { data_dir })
@@ -32,9 +33,10 @@ impl WalletStore {
 
     /// Get default data directory for the application
     pub fn default_data_dir() -> WalletResult<PathBuf> {
-        let app_data = dirs::data_dir()
-            .ok_or_else(|| WalletError::StorageError("Could not find app data directory".to_string()))?;
-        
+        let app_data = dirs::data_dir().ok_or_else(|| {
+            WalletError::StorageError("Could not find app data directory".to_string())
+        })?;
+
         Ok(app_data.join("thresh-wallet"))
     }
 
@@ -46,33 +48,37 @@ impl WalletStore {
     /// Get list of all wallet metadata
     pub fn list_wallets(&self) -> WalletResult<Vec<WalletMetadata>> {
         let mut wallets = Vec::new();
-        
+
         eprintln!("Listing wallets in directory: {:?}", self.data_dir);
         eprintln!("Directory exists: {}", self.data_dir.exists());
-        
+
         if !self.data_dir.exists() {
             eprintln!("Data directory doesn't exist, returning empty list");
             return Ok(wallets);
         }
 
-        let entries = fs::read_dir(&self.data_dir)
-            .map_err(|e| WalletError::StorageError(format!("Failed to read data directory: {}", e)))?;
+        let entries = fs::read_dir(&self.data_dir).map_err(|e| {
+            WalletError::StorageError(format!("Failed to read data directory: {}", e))
+        })?;
 
         for entry in entries {
-            let entry = entry
-                .map_err(|e| WalletError::StorageError(format!("Failed to read directory entry: {}", e)))?;
-            
-            if entry.file_type()
+            let entry = entry.map_err(|e| {
+                WalletError::StorageError(format!("Failed to read directory entry: {}", e))
+            })?;
+
+            if entry
+                .file_type()
                 .map_err(|e| WalletError::StorageError(format!("Failed to get file type: {}", e)))?
-                .is_file() {
-                
+                .is_file()
+            {
                 let file_name = entry.file_name();
-                let file_name_str = file_name.to_str()
+                let file_name_str = file_name
+                    .to_str()
                     .ok_or_else(|| WalletError::StorageError("Invalid file name".to_string()))?;
 
                 if file_name_str.ends_with(".wallet") {
                     let wallet_id = file_name_str.trim_end_matches(".wallet");
-                    
+
                     // Try to load wallet metadata
                     if let Ok(metadata) = self.load_wallet_metadata(wallet_id) {
                         wallets.push(metadata);
@@ -93,17 +99,17 @@ impl WalletStore {
         master_public_key: &[u8; 64],
     ) -> WalletResult<()> {
         let encrypted = wallet.encrypt(password)?;
-        
+
         // Save encrypted wallet data
         let wallet_path = self.get_wallet_path(wallet_id);
         let encrypted_bytes = encrypted.to_bytes();
-        
+
         eprintln!("Saving wallet to path: {:?}", wallet_path);
         eprintln!("Encrypted wallet size: {} bytes", encrypted_bytes.len());
-        
+
         fs::write(&wallet_path, &encrypted_bytes)
             .map_err(|e| WalletError::StorageError(format!("Failed to save wallet: {}", e)))?;
-            
+
         eprintln!("Wallet file written successfully");
 
         // Save wallet metadata
@@ -113,7 +119,7 @@ impl WalletStore {
             wallet_id: wallet_id.to_string(),
             master_public_key: master_public_key.to_vec(),
         };
-        
+
         self.save_wallet_metadata(wallet_id, &metadata)?;
         eprintln!("Wallet metadata saved successfully");
 
@@ -123,7 +129,7 @@ impl WalletStore {
     /// Load encrypted wallet from storage
     pub fn load_wallet(&self, wallet_id: &str, password: &str) -> WalletResult<WalletWrapper> {
         let wallet_path = self.get_wallet_path(wallet_id);
-        
+
         if !wallet_path.exists() {
             return Err(WalletError::NotFound);
         }
@@ -144,14 +150,16 @@ impl WalletStore {
 
         // Remove wallet file
         if wallet_path.exists() {
-            fs::remove_file(&wallet_path)
-                .map_err(|e| WalletError::StorageError(format!("Failed to delete wallet: {}", e)))?;
+            fs::remove_file(&wallet_path).map_err(|e| {
+                WalletError::StorageError(format!("Failed to delete wallet: {}", e))
+            })?;
         }
 
         // Remove metadata file
         if metadata_path.exists() {
-            fs::remove_file(&metadata_path)
-                .map_err(|e| WalletError::StorageError(format!("Failed to delete wallet metadata: {}", e)))?;
+            fs::remove_file(&metadata_path).map_err(|e| {
+                WalletError::StorageError(format!("Failed to delete wallet metadata: {}", e))
+            })?;
         }
 
         Ok(())
@@ -164,7 +172,7 @@ impl WalletStore {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        
+
         format!("wallet_{}", timestamp)
     }
 
@@ -180,8 +188,9 @@ impl WalletStore {
 
     fn save_wallet_metadata(&self, wallet_id: &str, metadata: &WalletMetadata) -> WalletResult<()> {
         let metadata_path = self.get_metadata_path(wallet_id);
-        let metadata_json = serde_json::to_string_pretty(metadata)
-            .map_err(|e| WalletError::StorageError(format!("Failed to serialize metadata: {}", e)))?;
+        let metadata_json = serde_json::to_string_pretty(metadata).map_err(|e| {
+            WalletError::StorageError(format!("Failed to serialize metadata: {}", e))
+        })?;
 
         fs::write(&metadata_path, metadata_json)
             .map_err(|e| WalletError::StorageError(format!("Failed to save metadata: {}", e)))?;
@@ -191,7 +200,7 @@ impl WalletStore {
 
     fn load_wallet_metadata(&self, wallet_id: &str) -> WalletResult<WalletMetadata> {
         let metadata_path = self.get_metadata_path(wallet_id);
-        
+
         if !metadata_path.exists() {
             return Err(WalletError::NotFound);
         }
@@ -216,7 +225,7 @@ mod tests {
     fn test_wallet_storage() {
         let temp_dir = tempdir().unwrap();
         let store = WalletStore::new(temp_dir.path().to_path_buf()).unwrap();
-        
+
         let mnemonic = generate_mnemonic(12).unwrap();
         let wallet = WalletWrapper::new(mnemonic.clone(), "Test Wallet".to_string());
         let wallet_id = WalletStore::generate_wallet_id();
@@ -224,29 +233,32 @@ mod tests {
 
         // Derive master public key for storage
         let seed = crate::crypto::mnemonic::mnemonic_to_seed(&mnemonic, "").unwrap();
-        let master_private_key = crate::crypto::keys::Bip32PrivateKey::from_bip39_seed(&seed).unwrap();
+        let master_private_key =
+            crate::crypto::keys::Bip32PrivateKey::from_bip39_seed(&seed).unwrap();
         let account_key = master_private_key
-            .derive(1852 | 0x80000000)  // purpose
-            .derive(1815 | 0x80000000)  // coin_type
-            .derive(0 | 0x80000000);    // account
+            .derive(1852 | 0x80000000) // purpose
+            .derive(1815 | 0x80000000) // coin_type
+            .derive(0 | 0x80000000); // account
         let master_public_key = account_key.to_public().to_extended_bytes();
 
         // Save wallet
-        store.save_wallet(&wallet_id, &wallet, password, &master_public_key).unwrap();
-        
+        store
+            .save_wallet(&wallet_id, &wallet, password, &master_public_key)
+            .unwrap();
+
         // Check wallet exists
         assert!(store.wallet_exists(&wallet_id));
-        
+
         // Load wallet
         let loaded_wallet = store.load_wallet(&wallet_id, password).unwrap();
         assert_eq!(wallet.name, loaded_wallet.name);
         assert_eq!(wallet.mnemonic, loaded_wallet.mnemonic);
-        
+
         // List wallets
         let wallets = store.list_wallets().unwrap();
         assert_eq!(wallets.len(), 1);
         assert_eq!(wallets[0].name, "Test Wallet");
-        
+
         // Delete wallet
         store.delete_wallet(&wallet_id).unwrap();
         assert!(!store.wallet_exists(&wallet_id));

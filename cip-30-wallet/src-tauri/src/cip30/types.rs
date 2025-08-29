@@ -1,4 +1,4 @@
-use pallas_primitives::alonzo::{TransactionInput};
+use pallas_primitives::alonzo::TransactionInput;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]

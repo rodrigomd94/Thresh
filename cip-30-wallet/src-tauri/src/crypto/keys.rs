@@ -1,11 +1,11 @@
-use ed25519_bip32::{XPrv, XPub, DerivationScheme};
 use crate::wallet::{WalletError, WalletResult};
+use ed25519_bip32::{DerivationScheme, XPrv, XPub};
 
 /// Secret key types following Pallas wallet pattern
 #[derive(Debug, Clone)]
 pub enum SecretKey {
-    Normal([u8; 32]),     // Standard Ed25519 key
-    Extended([u8; 64]),   // Extended key with chain code
+    Normal([u8; 32]),   // Standard Ed25519 key
+    Extended([u8; 64]), // Extended key with chain code
 }
 
 impl SecretKey {
@@ -40,13 +40,13 @@ impl SecretKey {
     /// Generate public key
     pub fn to_public(&self) -> WalletResult<[u8; 32]> {
         let private_key = self.to_normal();
-        
+
         // Use ed25519-dalek for public key generation
         use ed25519_dalek::{SigningKey, VerifyingKey};
-        
+
         let signing_key = SigningKey::from_bytes(&private_key);
         let verifying_key: VerifyingKey = signing_key.verifying_key();
-        
+
         Ok(verifying_key.to_bytes())
     }
 }
@@ -61,9 +61,9 @@ impl Bip32PrivateKey {
         // Use the seed directly with normalize_bytes_force3rd following Pallas pattern
         let mut xprv_bytes = [0u8; 96]; // XPrv size
         xprv_bytes[..64].copy_from_slice(seed);
-        
+
         let xprv = XPrv::normalize_bytes_force3rd(xprv_bytes);
-        
+
         Ok(Bip32PrivateKey(xprv))
     }
 
@@ -107,7 +107,9 @@ impl Bip32PublicKey {
         self.0
             .derive(DerivationScheme::V2, index)
             .map(Self)
-            .map_err(|e| WalletError::DerivationError(format!("Public key derivation failed: {:?}", e)))
+            .map_err(|e| {
+                WalletError::DerivationError(format!("Public key derivation failed: {:?}", e))
+            })
     }
 
     /// Get raw public key bytes
@@ -133,10 +135,10 @@ mod tests {
     fn test_bip32_key_generation() {
         let mnemonic = generate_mnemonic(12).unwrap();
         let seed = crate::crypto::mnemonic::mnemonic_to_seed(&mnemonic, "").unwrap();
-        
+
         let master_key = Bip32PrivateKey::from_bip39_seed(&seed).unwrap();
         let public_key = master_key.to_public();
-        
+
         assert_eq!(master_key.to_bytes().len(), 64);
         assert_eq!(public_key.to_bytes().len(), 32);
     }
@@ -145,18 +147,18 @@ mod tests {
     fn test_cardano_derivation_path() {
         let mnemonic = generate_mnemonic(24).unwrap();
         let seed = crate::crypto::mnemonic::mnemonic_to_seed(&mnemonic, "").unwrap();
-        
+
         let master = Bip32PrivateKey::from_bip39_seed(&seed).unwrap();
-        
+
         // Cardano derivation: m/1852'/1815'/0'
-        let purpose = master.derive(1852 | 0x80000000);  // Hardened
-        let coin_type = purpose.derive(1815 | 0x80000000);  // Hardened
-        let account = coin_type.derive(0 | 0x80000000);  // Hardened
-        
+        let purpose = master.derive(1852 | 0x80000000); // Hardened
+        let coin_type = purpose.derive(1815 | 0x80000000); // Hardened
+        let account = coin_type.derive(0 | 0x80000000); // Hardened
+
         // Derive first external address: m/1852'/1815'/0'/0/0
-        let external_chain = account.derive(0);  // Non-hardened
-        let address_key = external_chain.derive(0);  // Non-hardened
-        
+        let external_chain = account.derive(0); // Non-hardened
+        let address_key = external_chain.derive(0); // Non-hardened
+
         assert_eq!(address_key.to_bytes().len(), 64);
     }
 }

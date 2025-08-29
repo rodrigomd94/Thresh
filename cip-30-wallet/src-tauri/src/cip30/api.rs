@@ -1,3 +1,5 @@
+use pallas_primitives::conway::VKeyWitness;
+use pallas_primitives::NonEmptySet;
 use serde_json::{json, Value};
 use super::types::*;
 use super::signing::get_private_key_for_signing;
@@ -451,28 +453,53 @@ async fn sign_tx(params: Value, app_state: Option<&AppState>, app_handle: Option
     let tx_hex = params.get("tx")
         .and_then(|v| v.as_str())
         .ok_or("Missing or invalid tx parameter")?;
-    
+    let _is_partial = params.get("partialSign")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
     // Decode and validate the transaction
     let tx_bytes = hex::decode(tx_hex)
         .map_err(|e| format!("Failed to decode tx hex: {}", e))?;
-    let _pallas_tx = pallas_codec::minicbor::decode::<pallas_primitives::conway::Tx>(&tx_bytes)
+    let mut pallas_tx = pallas_codec::minicbor::decode::<pallas_primitives::conway::Tx>(&tx_bytes)
         .map_err(|e| format!("Failed to decode tx CBOR: {}", e))?;
-    
+    let tx_body_cbor = pallas_codec::minicbor::to_vec(&pallas_tx.transaction_body)
+        .map_err(|e| format!("Failed to re-encode tx body to CBOR: {}", e))?;
+    let tx_hash = pallas_crypto::hash::Hasher::<256>::hash(&tx_body_cbor);
+        eprintln!("[API] Transaction hash: {}", hex::encode(tx_hash)); 
+
+    eprintln!("[API] Decoded transaction: {:?}", pallas_tx);    
     // Show window and get private key
     eprintln!("[API] Showing password dialog for transaction signing");
-    let _private_key = get_private_key_for_signing(tx_hex, app_state, &app_handle).await?;
+    let signing_key = get_private_key_for_signing(tx_hex, app_state, &app_handle).await?;
     eprintln!("[API] Obtained private key for signing");
+    let private_key = pallas_crypto::key::ed25519::SecretKey::from(signing_key);
+    let public_key = private_key.public_key();
+    let signature: [u8; pallas_crypto::key::ed25519::Signature::SIZE] = private_key
+        .sign(&tx_hash)
+        .as_ref()
+        .try_into()
+        .unwrap();
+
+    let mut vkey_witnesses = pallas_tx
+        .transaction_witness_set
+        .vkeywitness
+        .as_ref()
+        .map(|x| x.clone().to_vec())
+        .unwrap_or_default();
+
+    vkey_witnesses.push(VKeyWitness {
+        vkey: Vec::from(public_key.as_ref()).into(),
+        signature: Vec::from(signature.as_ref()).into(),
+    });
+
+    pallas_tx.transaction_witness_set.vkeywitness =
+                    Some(NonEmptySet::from_vec(vkey_witnesses).unwrap());
+
+    let signed_tx_cbor = pallas_codec::minicbor::to_vec(&pallas_tx)
+        .map_err(|e| format!("Failed to encode signed transaction to CBOR: {}", e))?;
+    let signed_tx_hex = hex::encode(signed_tx_cbor);
+    eprintln!("[API] Signed transaction hex: {}", signed_tx_hex);
     
-    // TODO: Use the private_key to actually sign the transaction
-    // For now, return a mock witness set
-    let mock_vkey = "8200582c82008202828200581c4d7b4fae42073d8175d1daa7ed8b7f46055bc8b48bbec1104110b13e";
-    let mock_signature = "845846a201025820aceecdf2f7e5a0a91a6a0e06cb051d87e8827fd08cb44666c39948e2b2e3f79a5840d548cb87170df840754dc81dd5ae73f8bbb770a5826a45bb90b3186d1d8f5fb8a73ad13be8bb0a85bbf9dd1b195b9c96fc1914b3bf50e46cf473d33b730b50c";
-    
-    let witness_set = format!("a10081825820{}5840{}", mock_vkey, mock_signature);
-    
-    Ok(json!({
-        "witness": witness_set
-    }))
+    Ok(json!(signed_tx_hex))
 }
 
 fn sign_data(params: Value) -> Result<Value, String> {
