@@ -127,7 +127,7 @@
           throw new Error(result.error);
         }
         
-        return result.txHash;
+        return result;
       }
     };
   }

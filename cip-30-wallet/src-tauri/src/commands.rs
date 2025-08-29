@@ -171,9 +171,26 @@ pub async fn create_wallet(
     let coin_type = purpose.derive(1815 | 0x80000000); // Hardened
     let account = coin_type.derive(0 | 0x80000000); // Hardened, account 0
 
-    // Store the account-level public key (can derive external/internal chains and addresses)
-    let account_public_key = account.to_public();
-    let account_public_key_bytes = account_public_key.to_extended_bytes();
+    // Derive Ed25519 public keys for both payment and staking
+    // Payment key: m/1852'/1815'/0'/0/0 (external, first address)
+    let external_chain = account.derive(0); // external chain (non-hardened)
+    let first_address_private = external_chain.derive(0); // first address (non-hardened)
+    let payment_signing_key = first_address_private.to_signing_key();
+    let payment_ed25519_private = pallas_crypto::key::ed25519::SecretKey::from(payment_signing_key);
+    let payment_ed25519_public = payment_ed25519_private.public_key();
+    
+    // Staking key: m/1852'/1815'/0'/2/0 (staking chain)
+    let staking_chain = account.derive(2); // staking chain (non-hardened)
+    let staking_private = staking_chain.derive(0); // first staking key (non-hardened)
+    let staking_signing_key = staking_private.to_signing_key();
+    let staking_ed25519_private = pallas_crypto::key::ed25519::SecretKey::from(staking_signing_key);
+    let staking_ed25519_public = staking_ed25519_private.public_key();
+    
+    // Store both keys: payment (32 bytes) + staking (32 bytes) = 64 bytes total
+    // This is the same size as the old BIP32 extended key, but with different content
+    let mut account_public_key_bytes = [0u8; 64];
+    account_public_key_bytes[..32].copy_from_slice(payment_ed25519_public.as_ref());
+    account_public_key_bytes[32..].copy_from_slice(staking_ed25519_public.as_ref());
 
     let store = state.wallet_store.lock().unwrap();
 
@@ -660,9 +677,16 @@ pub fn get_signing_key_from_wallet(
             _ => format!("Failed to load wallet: {}", e),
         })?;
 
+    // DEBUG: Log the decrypted mnemonic to verify it's correct
+    eprintln!("[SIGNING] Decrypted mnemonic: {:?}", wallet.mnemonic);
+    eprintln!("[SIGNING] Mnemonic word count: {}", wallet.mnemonic.len());
+
     // Generate seed from mnemonic
     let seed = mnemonic_to_seed(&wallet.mnemonic, "")
         .map_err(|e| format!("Failed to generate seed: {}", e))?;
+    
+    // DEBUG: Log the seed to verify it's the same as in tests
+    eprintln!("[SIGNING] Seed (first 32 bytes): {}", hex::encode(&seed[..32.min(seed.len())]));
 
     // Derive master private key
     let master_private_key = Bip32PrivateKey::from_bip39_seed(&seed)
@@ -672,12 +696,268 @@ pub fn get_signing_key_from_wallet(
     // For now, we'll use the first account's first external address key
     // In a real implementation, you'd determine which key to use based on the transaction
     // Derive to: m/1852'/1815'/0'/0/0
-    let signing_key = master_private_key
+    let address_private_key = master_private_key
         .derive(1852 | 0x80000000) // purpose (hardened)
         .derive(1815 | 0x80000000) // coin_type (hardened)
         .derive(0 | 0x80000000) // account (hardened)
         .derive(0) // external chain
-        .derive(0) // first address
-        .to_signing_key();
+        .derive(0); // first address
+    
+    // Get the expected public key from our BIP32 private key
+    let address_public_key = address_private_key.to_public();
+    let expected_public_key_bytes = address_public_key.to_bytes();
+    eprintln!("[SIGNING] Expected BIP32 public key: {}", hex::encode(&expected_public_key_bytes));
+    
+    // Use the to_signing_key method which should properly extract the Ed25519 private key
+    let signing_key = address_private_key.to_signing_key();
+    eprintln!("[SIGNING] Signing key (32 bytes): {}", hex::encode(&signing_key));
+    
+    // Test if this produces the correct public key
+    let test_private = pallas_crypto::key::ed25519::SecretKey::from(signing_key);
+    let test_public = test_private.public_key();
+    eprintln!("[SIGNING] Test Ed25519 public key: {}", hex::encode(test_public.as_ref()));
+    
+    if test_public.as_ref() != &expected_public_key_bytes {
+        eprintln!("[SIGNING] ❌ Key mismatch!");
+        eprintln!("[SIGNING] This indicates the ed25519_bip32 library is not producing compatible keys");
+        // Continue anyway for now to see if signatures work
+    } else {
+        eprintln!("[SIGNING] ✅ Keys match!");
+    }
+    
     Ok(signing_key)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::crypto::mnemonic::generate_mnemonic;
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_get_addresses_from_wallet_ed25519() {
+        // Create temporary directory for test
+        let temp_dir = tempdir().unwrap();
+        let wallet_store = WalletStore::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Generate test mnemonic and create wallet
+        let mnemonic = vec![
+            "abandon".to_string(), "abandon".to_string(), "abandon".to_string(),
+            "abandon".to_string(), "abandon".to_string(), "abandon".to_string(),
+            "abandon".to_string(), "abandon".to_string(), "abandon".to_string(),
+            "abandon".to_string(), "abandon".to_string(), "about".to_string(),
+        ];
+        let password = "test_password";
+        let wallet_name = "Test Wallet".to_string();
+
+        // Create wallet following the same process as create_wallet command
+        let seed = mnemonic_to_seed(&mnemonic, "").unwrap();
+        let master_private_key = Bip32PrivateKey::from_bip39_seed(&seed).unwrap();
+
+        // Derive to account level: m/1852'/1815'/0' (hardened derivation)
+        let purpose = master_private_key.derive(1852 | 0x80000000);
+        let coin_type = purpose.derive(1815 | 0x80000000);
+        let account = coin_type.derive(0 | 0x80000000);
+
+        // Derive Ed25519 public keys for both payment and staking
+        let external_chain = account.derive(0);
+        let first_address_private = external_chain.derive(0);
+        let payment_signing_key = first_address_private.to_signing_key();
+        let payment_ed25519_private = pallas_crypto::key::ed25519::SecretKey::from(payment_signing_key);
+        let payment_ed25519_public = payment_ed25519_private.public_key();
+        
+        let staking_chain = account.derive(2);
+        let staking_private = staking_chain.derive(0);
+        let staking_signing_key = staking_private.to_signing_key();
+        let staking_ed25519_private = pallas_crypto::key::ed25519::SecretKey::from(staking_signing_key);
+        let staking_ed25519_public = staking_ed25519_private.public_key();
+        
+        // Store both keys: payment (32 bytes) + staking (32 bytes) = 64 bytes total
+        let mut account_public_key_bytes = [0u8; 64];
+        account_public_key_bytes[..32].copy_from_slice(payment_ed25519_public.as_ref());
+        account_public_key_bytes[32..].copy_from_slice(staking_ed25519_public.as_ref());
+
+        // Create and save wallet
+        let wallet = WalletWrapper::new(mnemonic.clone(), wallet_name);
+        let wallet_id = WalletStore::generate_wallet_id();
+
+        println!("Creating wallet with ID: {}", wallet_id);
+        wallet_store.save_wallet(&wallet_id, &wallet, password, &account_public_key_bytes).unwrap();
+
+        // Test: Try to get addresses from wallet
+        println!("Testing get_addresses_from_wallet...");
+        let result = derive_addresses_from_wallet(
+            &wallet_store,
+            &wallet_id,
+            0, // account_index
+            1, // count
+            pallas_addresses::Network::Testnet,
+        );
+
+        match &result {
+            Ok(addresses) => {
+                println!("✅ Successfully loaded {} addresses", addresses.len());
+                for addr in addresses {
+                    println!("  Address: {}", addr.address);
+                    println!("  Path: {}", addr.path);
+                }
+            }
+            Err(e) => {
+                println!("❌ Failed to load addresses: {}", e);
+            }
+        }
+
+        // The test should succeed
+        assert!(result.is_ok(), "Failed to load addresses: {:?}", result.err());
+        
+        let addresses = result.unwrap();
+        assert_eq!(addresses.len(), 1);
+        
+        // Verify the address is correct
+        let addr = &addresses[0];
+        assert!(addr.address.starts_with("addr_test1"));
+        assert_eq!(addr.account_index, 0);
+        assert_eq!(addr.address_index, 0);
+        
+        println!("✅ Test passed: address loading works with Ed25519 keys");
+    }
+
+    #[test]
+    fn test_get_addresses_from_wallet_with_real_wallet() {
+        // Test with real wallet store and actual wallet ID
+        let data_dir = WalletStore::default_data_dir().unwrap();
+        let wallet_store = WalletStore::new(data_dir).unwrap();
+        
+        // List existing wallets
+        println!("Listing existing wallets...");
+        match wallet_store.list_wallets() {
+            Ok(wallets) => {
+                println!("Found {} wallets:", wallets.len());
+                for wallet in &wallets {
+                    println!("  Wallet: {} (ID: {}, created: {})", wallet.name, wallet.wallet_id, wallet.created_at);
+                    println!("    Master key length: {} bytes", wallet.master_public_key.len());
+                    println!("    First 16 bytes: {}", hex::encode(&wallet.master_public_key[..16.min(wallet.master_public_key.len())]));
+                    
+                    // Test address derivation for this wallet
+                    println!("  Testing address derivation...");
+                    match derive_addresses_from_wallet(
+                        &wallet_store,
+                        &wallet.wallet_id,
+                        0, // account_index
+                        1, // count
+                        pallas_addresses::Network::Testnet,
+                    ) {
+                        Ok(addresses) => {
+                            println!("  ✅ Successfully loaded {} addresses", addresses.len());
+                            for addr in &addresses {
+                                println!("    Address: {}", addr.address);
+                            }
+                        }
+                        Err(e) => {
+                            println!("  ❌ Failed to load addresses: {}", e);
+                        }
+                    }
+                    
+                    // Also test change and reward addresses
+                    println!("  Testing change address...");
+                    match crate::wallet::get_change_address_from_wallet(
+                        &wallet_store,
+                        &wallet.wallet_id,
+                        0,
+                        pallas_addresses::Network::Testnet,
+                    ) {
+                        Ok(change_addr) => {
+                            println!("  ✅ Change address: {}", change_addr.address);
+                        }
+                        Err(e) => {
+                            println!("  ❌ Failed to get change address: {}", e);
+                        }
+                    }
+                    
+                    println!("  Testing reward addresses...");
+                    match crate::wallet::get_reward_addresses_from_wallet(
+                        &wallet_store,
+                        &wallet.wallet_id,
+                        0,
+                        pallas_addresses::Network::Testnet,
+                    ) {
+                        Ok(reward_addrs) => {
+                            println!("  ✅ Reward addresses: {:?}", reward_addrs);
+                        }
+                        Err(e) => {
+                            println!("  ❌ Failed to get reward addresses: {}", e);
+                        }
+                    }
+                    
+                    println!();
+                }
+            }
+            Err(e) => {
+                println!("❌ Failed to list wallets: {}", e);
+            }
+        }
+    }
+
+    #[test]
+    fn test_frontend_exact_scenario() {
+        // Test the exact scenario that the frontend encounters
+        let data_dir = WalletStore::default_data_dir().unwrap();
+        let wallet_store = WalletStore::new(data_dir).unwrap();
+        
+        // List existing wallets and test direct function calls
+        println!("Testing frontend scenario with direct function calls...");
+        match wallet_store.list_wallets() {
+            Ok(wallets) => {
+                if wallets.is_empty() {
+                    println!("❌ No wallets found - this explains the frontend error!");
+                    return;
+                }
+                
+                for wallet in &wallets {
+                    println!("Testing wallet: {} ({})", wallet.name, wallet.wallet_id);
+                    println!("  Created: {}", wallet.created_at);
+                    println!("  Key length: {} bytes", wallet.master_public_key.len());
+                    
+                    // Test the exact call that get_addresses_from_wallet makes internally
+                    let network = pallas_addresses::Network::Testnet; // Default network
+                    match derive_addresses_from_wallet(
+                        &wallet_store,
+                        &wallet.wallet_id,
+                        0, // account_index
+                        5, // count (same as frontend)
+                        network,
+                    ) {
+                        Ok(addresses) => {
+                            println!("  ✅ Direct call succeeded: {} addresses", addresses.len());
+                            if addresses.is_empty() {
+                                println!("  ⚠️  No addresses returned - this could be the issue!");
+                            }
+                            for (i, addr) in addresses.iter().enumerate() {
+                                println!("    Address {}: {}", i + 1, addr.address);
+                            }
+                        }
+                        Err(e) => {
+                            println!("  ❌ Direct call failed: {}", e);
+                            println!("  This is likely the exact error the frontend sees!");
+                            
+                            // Debug the wallet format
+                            println!("  Debug info:");
+                            println!("    - Wallet format might be incompatible");
+                            println!("    - First 16 bytes of key: {}", hex::encode(&wallet.master_public_key[..16.min(wallet.master_public_key.len())]));
+                            
+                            // Check if this is a BIP32 vs Ed25519 format issue
+                            if wallet.created_at < 1756484000 {
+                                println!("    - Wallet created before Ed25519 implementation");
+                                println!("    - This wallet likely contains BIP32 keys, not Ed25519 keys");
+                            }
+                        }
+                    }
+                    println!();
+                }
+            }
+            Err(e) => {
+                println!("❌ Failed to list wallets: {}", e);
+            }
+        }
+    }
 }

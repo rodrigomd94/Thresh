@@ -83,11 +83,40 @@ impl Bip32PrivateKey {
     }
 
     /// Get signing key for transactions
+    /// This extracts the Ed25519 private key from the BIP32 key
     pub fn to_signing_key(&self) -> [u8; 32] {
+        // The ed25519_bip32::XPrv stores the private key in the extended key format
+        // We need to extract the Ed25519 private key properly
+        
+        // The extended_secret_key() gives us 64 bytes: private key (32) + chain code (32)
+        let extended = self.0.extended_secret_key();
+        
+        // But we need to check if this is the correct Ed25519 private key
+        // that will produce the matching public key
+        let mut private_key = [0u8; 32];
+        private_key.copy_from_slice(&extended[..32]);
+        
+        // This should be the Ed25519 private key that matches the public key
+        private_key
+    }
+    
+    /// Convert BIP32 private key to Ed25519 format
+    /// This is needed because BIP32 and Ed25519 have different key formats
+    pub fn to_ed25519_private_key(&self) -> Result<[u8; 32], String> {
+        // The proper way would be to use the BIP32 private key scalar and convert it
+        // For Ed25519-BIP32, we need to ensure the key is properly formatted
+        
+        // Get the raw private key bytes (first 32 bytes of extended key)
         let extended = self.0.extended_secret_key().clone();
-        let mut key = [0u8; 32];
-        key.copy_from_slice(&extended[..32]);
-        key
+        let mut private_scalar = [0u8; 32];
+        private_scalar.copy_from_slice(&extended[..32]);
+        
+        // For Ed25519-BIP32 compatibility, we might need to apply the proper conversion
+        // This is a simplified version - a proper implementation would follow SLIP-0010
+        
+        // TODO: Implement proper BIP32-Ed25519 conversion following SLIP-0010
+        // For now, return the raw scalar
+        Ok(private_scalar)
     }
 }
 

@@ -10,7 +10,7 @@ pub struct WalletMetadata {
     pub name: String,
     pub created_at: i64,
     pub wallet_id: String,
-    pub master_public_key: Vec<u8>, // Store extended public key (with chain code) for address derivation
+    pub master_public_key: Vec<u8>, // Store Ed25519 public keys: payment (32 bytes) + staking (32 bytes) = 64 bytes
 }
 
 /// Wallet storage manager
@@ -239,7 +239,22 @@ mod tests {
             .derive(1852 | 0x80000000) // purpose
             .derive(1815 | 0x80000000) // coin_type
             .derive(0 | 0x80000000); // account
-        let master_public_key = account_key.to_public().to_extended_bytes();
+        // Derive Ed25519 public keys for both payment and staking (same as in commands.rs)
+        let external_chain = account_key.derive(0); // external chain
+        let first_address_private = external_chain.derive(0); // first address
+        let payment_signing_key = first_address_private.to_signing_key();
+        let payment_ed25519_private = pallas_crypto::key::ed25519::SecretKey::from(payment_signing_key);
+        let payment_ed25519_public = payment_ed25519_private.public_key();
+        
+        let staking_chain = account_key.derive(2); // staking chain
+        let staking_private = staking_chain.derive(0); // first staking key
+        let staking_signing_key = staking_private.to_signing_key();
+        let staking_ed25519_private = pallas_crypto::key::ed25519::SecretKey::from(staking_signing_key);
+        let staking_ed25519_public = staking_ed25519_private.public_key();
+        
+        let mut master_public_key = [0u8; 64];
+        master_public_key[..32].copy_from_slice(payment_ed25519_public.as_ref());
+        master_public_key[32..].copy_from_slice(staking_ed25519_public.as_ref());
 
         // Save wallet
         store
