@@ -137,9 +137,12 @@ fn setup_system_tray(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Err
     // Create tray menu
     let menu = Menu::with_items(app, &[&show_window, &quit_item])?;
     
+    // Load the tray icon using Tauri's Icon type
+    let tray_icon = tauri::tray::Icon::Raw(include_bytes!("../icons/tray-icon.png").to_vec());
+    
     // Build tray icon
     let _tray = TrayIconBuilder::new()
-        .icon(app.default_window_icon().unwrap().clone())
+        .icon(tray_icon)
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(handle_tray_menu_event)
