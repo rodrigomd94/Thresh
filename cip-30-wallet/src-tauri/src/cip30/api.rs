@@ -127,7 +127,7 @@ fn get_network_id(app_state: Option<&AppState>) -> Result<Value, String> {
 // Helper function to directly load runtime network (for CIP-30 API)
 fn load_runtime_network_direct() -> Option<pallas_addresses::Network> {
     let data_dir = dirs::data_dir()?;
-    let path = data_dir.join("cip-30-wallet").join("runtime_network.txt");
+    let path = data_dir.join("thresh-wallet").join("runtime_network.txt");
     
     eprintln!("[API] Checking runtime network file at: {:?}", path);
     

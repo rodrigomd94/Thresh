@@ -27,7 +27,17 @@ impl Default for AppConfig {
             network: NetworkConfig {
                 name: default_network(),
             },
-            utxorpc: None,
+            utxorpc: Some(UtxoRpcConfig::default()),
+        }
+    }
+}
+
+impl Default for UtxoRpcConfig {
+    fn default() -> Self {
+        Self {
+            mainnet_url: Some("http://localhost:50051".to_string()),
+            testnet_url: Some("http://localhost:50051".to_string()),
+            api_key: None,
         }
     }
 }
@@ -100,7 +110,7 @@ impl AppConfig {
         let data_dir = dirs::config_dir()
             .ok_or("Failed to get config directory")?;
         
-        Ok(data_dir.join("cip-30-wallet").join("config.toml"))
+        Ok(data_dir.join("thresh-wallet").join("config.toml"))
     }
 }
 

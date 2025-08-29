@@ -292,6 +292,50 @@ pub async fn save_network_to_config(
 }
 
 #[tauri::command]
+pub async fn save_utxorpc_to_config(
+    mainnet_url: Option<String>,
+    testnet_url: Option<String>, 
+    api_key: Option<String>,
+    state: State<'_, AppState>
+) -> Result<(), String> {
+    // Clone values for logging before moving them
+    let mainnet_url_log = mainnet_url.clone();
+    let testnet_url_log = testnet_url.clone();
+    let has_api_key = api_key.is_some();
+    
+    // Update the config
+    let mut updated_config = state.config.clone();
+    updated_config.utxorpc = Some(crate::config::UtxoRpcConfig {
+        mainnet_url,
+        testnet_url,
+        api_key,
+    });
+    
+    // Save to file
+    let config_path = AppConfig::default_config_path()
+        .map_err(|e| format!("Failed to get config path: {}", e))?;
+    updated_config.save(&config_path)
+        .map_err(|e| format!("Failed to save config: {}", e))?;
+    
+    eprintln!("UTXO RPC configuration saved to config");
+    if let Some(ref mainnet_url) = mainnet_url_log {
+        eprintln!("  Mainnet URL: {}", mainnet_url);
+    }
+    if let Some(ref testnet_url) = testnet_url_log {
+        eprintln!("  Testnet URL: {}", testnet_url);
+    }
+    if has_api_key {
+        eprintln!("  API Key: [configured]");
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn get_utxorpc_config(state: State<'_, AppState>) -> Result<Option<crate::config::UtxoRpcConfig>, String> {
+    Ok(state.config.utxorpc.clone())
+}
+
+#[tauri::command]
 pub async fn reset_runtime_network(state: State<'_, AppState>) -> Result<(), String> {
     let mut runtime_network = state.runtime_network.lock().unwrap();
     *runtime_network = None;
@@ -354,7 +398,7 @@ pub async fn validate_wallet_password(
 fn get_runtime_network_path() -> Result<std::path::PathBuf, String> {
     let data_dir = dirs::data_dir()
         .ok_or("Failed to get data directory")?;
-    Ok(data_dir.join("cip-30-wallet").join("runtime_network.txt"))
+    Ok(data_dir.join("thresh-wallet").join("runtime_network.txt"))
 }
 
 fn save_runtime_network(network: &str) -> Result<(), String> {

@@ -35,7 +35,7 @@ impl WalletStore {
         let app_data = dirs::data_dir()
             .ok_or_else(|| WalletError::StorageError("Could not find app data directory".to_string()))?;
         
-        Ok(app_data.join("cip-30-wallet"))
+        Ok(app_data.join("thresh-wallet"))
     }
 
     /// Check if a wallet exists
